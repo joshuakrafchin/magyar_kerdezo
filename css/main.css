@@ -233,6 +233,14 @@ body {
   resize: vertical;
 }
 
+/* Essay textarea — big and inviting */
+.essay-textarea {
+  min-height: 180px;
+  resize: vertical;
+  line-height: 1.7;
+  font-size: 0.95rem;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -316,17 +324,6 @@ body {
   background: #d1d5db;
 }
 
-.drive-link {
-  text-align: center;
-  margin-top: 20px;
-  font-size: 0.85rem;
-  color: var(--text-light);
-}
-
-.drive-link a {
-  color: var(--primary);
-}
-
 /* LOADING */
 .loading-container {
   text-align: center;
@@ -363,6 +360,35 @@ body {
 #loading-count {
   color: var(--text-light);
   font-size: 0.9rem;
+}
+
+/* BACKGROUND LOADING BANNER */
+.bg-loading-banner {
+  background: var(--primary-light);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.bg-loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--primary-light);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* QUIZ */
@@ -638,6 +664,53 @@ kbd {
   margin-top: 4px;
 }
 
+/* TOPICS EDITOR */
+.topics-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.topic-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.topic-input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+}
+
+.topic-remove {
+  font-size: 1.2rem;
+  color: var(--error);
+  flex-shrink: 0;
+  padding: 4px 8px;
+}
+
+.topic-remove:hover {
+  background: var(--error-bg);
+}
+
+.topics-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.topics-add-row .input {
+  flex: 1;
+}
+
+.topics-add-row .btn {
+  flex-shrink: 0;
+}
+
 /* RESPONSIVE */
 @media (max-width: 480px) {
   .form-grid {
@@ -651,5 +724,8 @@ kbd {
   }
   .quiz-question-text {
     font-size: 1.3rem;
+  }
+  .essay-textarea {
+    min-height: 140px;
   }
 }
