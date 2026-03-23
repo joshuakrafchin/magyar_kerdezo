@@ -15,7 +15,7 @@
         <h1 class="nav-title">Magyar Kérdező</h1>
         <div class="nav-right">
           <span id="nav-level" class="nav-level"></span>
-          <button id="btn-settings" class="btn-icon" title="Settings">⚙</button>
+          <button id="btn-settings" class="btn-icon" title="Settings">&#9881;</button>
         </div>
       </div>
     </nav>
@@ -24,7 +24,7 @@
     <div id="screen-welcome" class="screen">
       <div class="welcome-header">
         <h1>Magyar Kérdező</h1>
-        <p class="subtitle">Hungarian Language Exam Prep</p>
+        <p class="subtitle">Hungarian Naturalization Interview Prep</p>
       </div>
 
       <div class="card">
@@ -34,38 +34,9 @@
       </div>
 
       <div class="card">
-        <h2>Your Personal Details</h2>
-        <p class="hint">The interviewer will ask about these — fill in as much as you like</p>
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="pd-name">Name</label>
-            <input type="text" id="pd-name" class="input" placeholder="e.g. Péter">
-          </div>
-          <div class="form-group">
-            <label for="pd-age">Age</label>
-            <input type="text" id="pd-age" class="input" placeholder="e.g. 30">
-          </div>
-          <div class="form-group">
-            <label for="pd-job">Job / Occupation</label>
-            <input type="text" id="pd-job" class="input" placeholder="e.g. software engineer">
-          </div>
-          <div class="form-group">
-            <label for="pd-city">City / Country</label>
-            <input type="text" id="pd-city" class="input" placeholder="e.g. Budapest">
-          </div>
-          <div class="form-group">
-            <label for="pd-family">Family</label>
-            <input type="text" id="pd-family" class="input" placeholder="e.g. married, 2 kids">
-          </div>
-          <div class="form-group">
-            <label for="pd-hobbies">Hobbies</label>
-            <input type="text" id="pd-hobbies" class="input" placeholder="e.g. hiking, cooking">
-          </div>
-          <div class="form-group full-width">
-            <label for="pd-other">Other details</label>
-            <textarea id="pd-other" class="input textarea" placeholder="Anything else you want to be asked about..."></textarea>
-          </div>
-        </div>
+        <h2>Tell Us About Yourself</h2>
+        <p class="hint">Write about yourself in English — your name, age, job, family, hobbies, pets, children, why you moved to Hungary, etc. The more you write, the more personalized your practice questions will be.</p>
+        <textarea id="about-me-essay" class="input essay-textarea" placeholder="Example: My name is Anna. I am 35 years old and I work as a graphic designer. I moved to Budapest 3 years ago with my husband and our two children (ages 5 and 8). We have a dog named Mókus. I enjoy hiking in the Buda hills, cooking Hungarian food, and reading. I want Hungarian citizenship because Hungary is our home now..."></textarea>
       </div>
 
       <div class="card">
@@ -80,7 +51,7 @@
 
       <div class="card">
         <h2>Load Questions</h2>
-        <p class="hint">Generate with Gemini, or load a JSON file exported from the curriculum</p>
+        <p class="hint">Generate with Gemini (quiz starts after first 5 questions, rest load in background), or load a JSON file</p>
         <div class="load-options">
           <button id="btn-start" class="btn btn-primary btn-large">Generate with Gemini</button>
           <div class="or-divider"><span>or</span></div>
@@ -91,16 +62,12 @@
       </div>
 
       <button id="btn-continue" class="btn btn-primary btn-large hidden">Continue Where You Left Off</button>
-
-      <p class="drive-link">
-        📁 <a href="https://drive.google.com/drive/folders/1jCWvpsu-MmgYr712EtVBXnfcjK6OS4Vn" target="_blank">View curriculum on Google Drive</a>
-      </p>
     </div>
 
     <!-- LOADING SCREEN -->
     <div id="screen-loading" class="screen hidden">
       <div class="loading-container">
-        <div class="loading-icon">🇭🇺</div>
+        <div class="loading-icon">&#x1F1ED;&#x1F1FA;</div>
         <h2>Generating Your Questions...</h2>
         <p id="loading-status">Preparing A1 questions...</p>
         <div class="progress-bar-container">
@@ -112,6 +79,10 @@
 
     <!-- QUIZ SCREEN -->
     <div id="screen-quiz" class="screen hidden">
+      <div id="bg-loading-banner" class="bg-loading-banner hidden">
+        <span class="bg-loading-spinner"></span>
+        <span id="bg-loading-text">Loading more questions in background...</span>
+      </div>
       <div class="quiz-progress">
         <div class="quiz-progress-bar">
           <div id="quiz-progress-fill" class="progress-bar-fill"></div>
@@ -122,14 +93,14 @@
       <div class="quiz-question-card">
         <div class="quiz-step-label" id="quiz-step-label">Step 1: What does this mean?</div>
         <div class="quiz-question-text" id="quiz-question-text"></div>
-        <button id="btn-speak" class="btn-speak" title="Listen again">🔊</button>
+        <button id="btn-speak" class="btn-speak" title="Listen again">&#x1F50A;</button>
       </div>
 
       <div id="quiz-explanation" class="quiz-explanation hidden"></div>
 
       <div id="quiz-options" class="quiz-options"></div>
 
-      <button id="btn-next" class="btn btn-primary hidden">Next Question →</button>
+      <button id="btn-next" class="btn btn-primary hidden">Next Question &#8594;</button>
       <div class="keyboard-hint">
         <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> choose &nbsp; <kbd>Enter</kbd> next &nbsp; <kbd>R</kbd> replay audio
       </div>
@@ -175,7 +146,7 @@
     <!-- SETTINGS SCREEN -->
     <div id="screen-settings" class="screen hidden">
       <div class="settings-header">
-        <button id="btn-settings-back" class="btn-icon">←</button>
+        <button id="btn-settings-back" class="btn-icon">&#8592;</button>
         <h2>Settings</h2>
       </div>
 
@@ -185,38 +156,21 @@
       </div>
 
       <div class="card">
-        <h3>Personal Details</h3>
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="s-pd-name">Name</label>
-            <input type="text" id="s-pd-name" class="input">
-          </div>
-          <div class="form-group">
-            <label for="s-pd-age">Age</label>
-            <input type="text" id="s-pd-age" class="input">
-          </div>
-          <div class="form-group">
-            <label for="s-pd-job">Job</label>
-            <input type="text" id="s-pd-job" class="input">
-          </div>
-          <div class="form-group">
-            <label for="s-pd-city">City</label>
-            <input type="text" id="s-pd-city" class="input">
-          </div>
-          <div class="form-group">
-            <label for="s-pd-family">Family</label>
-            <input type="text" id="s-pd-family" class="input">
-          </div>
-          <div class="form-group">
-            <label for="s-pd-hobbies">Hobbies</label>
-            <input type="text" id="s-pd-hobbies" class="input">
-          </div>
-          <div class="form-group full-width">
-            <label for="s-pd-other">Other</label>
-            <textarea id="s-pd-other" class="input textarea"></textarea>
-          </div>
+        <h3>About Me</h3>
+        <p class="hint">Write about yourself — this personalizes your interview questions</p>
+        <textarea id="s-about-me" class="input essay-textarea"></textarea>
+        <button id="btn-save-essay" class="btn btn-primary" style="margin-top:12px">Save</button>
+      </div>
+
+      <div class="card">
+        <h3>Interview Topics</h3>
+        <p class="hint">These topics will always be covered in your questions, even if not in your essay. Edit, remove, or add new ones.</p>
+        <div id="topics-editor" class="topics-editor"></div>
+        <div class="topics-add-row">
+          <input type="text" id="new-topic-input" class="input" placeholder="Add a new topic...">
+          <button id="btn-add-topic" class="btn btn-secondary">Add</button>
         </div>
-        <button id="btn-save-details" class="btn btn-primary" style="margin-top:12px">Save Details</button>
+        <button id="btn-reset-topics" class="btn btn-secondary" style="margin-top:8px">Reset to Defaults</button>
       </div>
 
       <div class="card">
@@ -239,10 +193,6 @@
           <button id="btn-reset" class="btn btn-danger">Reset All Progress</button>
         </div>
       </div>
-
-      <p class="drive-link">
-        📁 <a href="https://drive.google.com/drive/folders/1jCWvpsu-MmgYr712EtVBXnfcjK6OS4Vn" target="_blank">Curriculum on Google Drive</a>
-      </p>
     </div>
   </div>
 

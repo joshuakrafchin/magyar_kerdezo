@@ -1,10 +1,30 @@
 const STORAGE_KEY = 'magyar_kerdezo_state';
 
+const DEFAULT_INTERVIEW_TOPICS = [
+  'Famous Hungarians (e.g. Liszt, Rubik, Semmelweis, Bartók, Puskás)',
+  'Children — do you have any, do you want any, ages',
+  'Pets — do you have any, what kind',
+  'Interests and hobbies',
+  'Why you want to live in Hungary',
+  'How long you have lived in Hungary',
+  'Your favorite Hungarian food and drink',
+  'Your daily routine',
+  'Your neighborhood and city',
+  'Hungarian holidays and traditions you know',
+  'How you learned Hungarian',
+  'Your family and relationships',
+  'Your job or studies',
+  'Travel within Hungary',
+];
+
 const defaultState = {
   apiKey: '',
+  aboutMeEssay: '',
+  // Keep personalDetails for backward compat migration
   personalDetails: {
     name: '', age: '', job: '', city: '', family: '', hobbies: '', other: ''
   },
+  interviewTopics: [...DEFAULT_INTERVIEW_TOPICS],
   currentLevel: 'A1',
   questions: [],
   session: {
@@ -26,14 +46,34 @@ const defaultState = {
 let state = null;
 const listeners = [];
 
+export { DEFAULT_INTERVIEW_TOPICS };
+
 export function getState() {
   if (!state) {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         state = JSON.parse(saved);
-        // Merge with defaults for any new fields
         state = deepMerge(defaultState, state);
+        // Migrate old personalDetails to essay if no essay exists
+        if (!state.aboutMeEssay && state.personalDetails) {
+          const pd = state.personalDetails;
+          const parts = [];
+          if (pd.name) parts.push(`My name is ${pd.name}.`);
+          if (pd.age) parts.push(`I am ${pd.age} years old.`);
+          if (pd.job) parts.push(`I work as a ${pd.job}.`);
+          if (pd.city) parts.push(`I live in ${pd.city}.`);
+          if (pd.family) parts.push(`Family: ${pd.family}.`);
+          if (pd.hobbies) parts.push(`Hobbies: ${pd.hobbies}.`);
+          if (pd.other) parts.push(pd.other);
+          if (parts.length > 0) {
+            state.aboutMeEssay = parts.join(' ');
+          }
+        }
+        // Ensure interviewTopics exists
+        if (!state.interviewTopics || state.interviewTopics.length === 0) {
+          state.interviewTopics = [...DEFAULT_INTERVIEW_TOPICS];
+        }
       } catch {
         state = structuredClone(defaultState);
       }

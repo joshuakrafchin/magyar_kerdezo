@@ -1,4 +1,4 @@
-import { getState, setState, resetState, exportState, importState } from './state.js';
+import { getState, setState, resetState, exportState, importState, DEFAULT_INTERVIEW_TOPICS } from './state.js';
 import { generateQuestions } from './gemini.js';
 import { LEVELS, QUESTIONS_PER_LEVEL, getLevelIndex } from './curriculum.js';
 import { speak, stop } from './speech.js';
@@ -14,6 +14,7 @@ import {
 const screens = ['welcome', 'loading', 'quiz', 'results', 'settings'];
 let currentScreen = 'welcome';
 let previousScreen = 'welcome';
+let backgroundGenerating = false;
 
 function showScreen(name) {
   previousScreen = currentScreen;
@@ -37,13 +38,7 @@ function initWelcome() {
 
   // Populate fields from state
   document.getElementById('input-api-key').value = state.apiKey || '';
-  document.getElementById('pd-name').value = state.personalDetails.name || '';
-  document.getElementById('pd-age').value = state.personalDetails.age || '';
-  document.getElementById('pd-job').value = state.personalDetails.job || '';
-  document.getElementById('pd-city').value = state.personalDetails.city || '';
-  document.getElementById('pd-family').value = state.personalDetails.family || '';
-  document.getElementById('pd-hobbies').value = state.personalDetails.hobbies || '';
-  document.getElementById('pd-other').value = state.personalDetails.other || '';
+  document.getElementById('about-me-essay').value = state.aboutMeEssay || '';
 
   // Level selector
   document.querySelectorAll('.level-btn').forEach(btn => {
@@ -90,7 +85,6 @@ function initWelcome() {
       }
     };
     reader.readAsText(file);
-    // Reset so same file can be re-selected
     e.target.value = '';
   };
 
@@ -103,10 +97,6 @@ function initWelcome() {
 
 /**
  * Normalize imported JSON questions into the app's internal format.
- * Accepts either:
- *   - An array of question objects directly
- *   - An object with a "questions" array property
- * Each question needs at minimum: questionHu, meaningOptions, responseOptions
  */
 function normalizeImportedQuestions(data) {
   let raw = Array.isArray(data) ? data : (data.questions || []);
@@ -132,20 +122,12 @@ function normalizeImportedQuestions(data) {
 
 function saveWelcomeFields() {
   const apiKey = document.getElementById('input-api-key').value.trim();
-  const personalDetails = {
-    name: document.getElementById('pd-name').value.trim(),
-    age: document.getElementById('pd-age').value.trim(),
-    job: document.getElementById('pd-job').value.trim(),
-    city: document.getElementById('pd-city').value.trim(),
-    family: document.getElementById('pd-family').value.trim(),
-    hobbies: document.getElementById('pd-hobbies').value.trim(),
-    other: document.getElementById('pd-other').value.trim(),
-  };
+  const aboutMeEssay = document.getElementById('about-me-essay').value.trim();
   const selectedLevel = document.querySelector('.level-btn.selected')?.dataset.level || 'A1';
-  setState({ apiKey, personalDetails, currentLevel: selectedLevel });
+  setState({ apiKey, aboutMeEssay, currentLevel: selectedLevel });
 }
 
-// ─── Loading Screen ───
+// ─── Loading / Background Generation ───
 async function startGeneration() {
   saveWelcomeFields();
   const state = getState();
@@ -160,6 +142,7 @@ async function startGeneration() {
   const startLevel = getLevelIndex(state.currentLevel);
   const allQuestions = [];
   let totalExpected = 0;
+  let firstBatchSent = false;
 
   // Calculate total questions to generate
   for (let i = startLevel; i < LEVELS.length; i++) {
@@ -174,33 +157,63 @@ async function startGeneration() {
       const count = QUESTIONS_PER_LEVEL[level];
       document.getElementById('loading-status').textContent = `Generating ${level} questions...`;
 
-      const questions = await generateQuestions(
+      await generateQuestions(
         state.apiKey,
         level,
-        state.personalDetails,
+        state.aboutMeEssay,
+        state.interviewTopics,
         count,
-        (generated) => {
-          const total = allQuestions.length + generated;
-          const pct = Math.round((total / totalExpected) * 100);
+        null, // progress handled via onBatchReady
+        (batchQuestions) => {
+          // Each batch arrives here
+          allQuestions.push(...batchQuestions);
+          setState({ questions: [...allQuestions] });
+
+          // Update progress UI
+          const pct = Math.round((allQuestions.length / totalExpected) * 100);
           document.getElementById('loading-progress').style.width = `${pct}%`;
-          document.getElementById('loading-count').textContent = `${total} / ${totalExpected} questions`;
+          document.getElementById('loading-count').textContent = `${allQuestions.length} / ${totalExpected} questions`;
+
+          // After first batch (5 questions), start the quiz immediately
+          if (!firstBatchSent && allQuestions.length >= 5) {
+            firstBatchSent = true;
+            backgroundGenerating = true;
+            showScreen('quiz');
+            updateBackgroundBanner(allQuestions.length, totalExpected);
+            startQuiz();
+          } else if (firstBatchSent) {
+            // Update background banner
+            updateBackgroundBanner(allQuestions.length, totalExpected);
+          }
         }
       );
-
-      allQuestions.push(...questions);
     }
 
-    setState({ questions: allQuestions });
-    document.getElementById('loading-status').textContent = 'Done! Starting quiz...';
-    document.getElementById('loading-progress').style.width = '100%';
+    // All done
+    backgroundGenerating = false;
+    setState({ questions: [...allQuestions] });
+    hideBackgroundBanner();
 
-    setTimeout(() => startQuiz(), 500);
+    if (!firstBatchSent) {
+      // Edge case: all batches done before quiz started
+      document.getElementById('loading-status').textContent = 'Done! Starting quiz...';
+      document.getElementById('loading-progress').style.width = '100%';
+      setTimeout(() => startQuiz(), 500);
+    }
   } catch (err) {
+    backgroundGenerating = false;
+    hideBackgroundBanner();
+
+    if (allQuestions.length >= 5) {
+      // We have enough to quiz on, just stop background loading
+      console.error('Background generation error:', err);
+      return;
+    }
+
     document.getElementById('loading-status').textContent = `Error: ${err.message}`;
     document.getElementById('loading-progress').style.width = '0%';
     console.error('Generation error:', err);
 
-    // Add a retry / back button
     const container = document.querySelector('.loading-container');
     if (!document.getElementById('btn-loading-back')) {
       const btn = document.createElement('button');
@@ -215,6 +228,20 @@ async function startGeneration() {
       container.appendChild(btn);
     }
   }
+}
+
+function updateBackgroundBanner(loaded, total) {
+  const banner = document.getElementById('bg-loading-banner');
+  const text = document.getElementById('bg-loading-text');
+  if (banner && currentScreen === 'quiz') {
+    banner.classList.remove('hidden');
+    text.textContent = `Loading more questions... (${loaded}/${total})`;
+  }
+}
+
+function hideBackgroundBanner() {
+  const banner = document.getElementById('bg-loading-banner');
+  if (banner) banner.classList.add('hidden');
 }
 
 // ─── Quiz Screen ───
@@ -243,6 +270,17 @@ function startQuiz() {
   sessionIndex = 0;
   sessionStats = { correct: 0, incorrect: 0, bestStreak: 0, currentStreak: 0, mistakes: [] };
   showScreen('quiz');
+
+  // Show/hide background banner
+  if (backgroundGenerating) {
+    const state2 = getState();
+    let totalExpected = 0;
+    for (let i = getLevelIndex(state2.currentLevel); i < LEVELS.length; i++) {
+      totalExpected += QUESTIONS_PER_LEVEL[LEVELS[i]];
+    }
+    updateBackgroundBanner(state2.questions.length, totalExpected);
+  }
+
   showQuestion();
 }
 
@@ -363,11 +401,9 @@ function handleOptionClick(card, selected, allOptions) {
 
     setTimeout(() => {
       if (isCorrect) {
-        // Move to step 2
         quizStep = 2;
         document.getElementById('quiz-step-label').textContent = 'Step 2: Choose the correct response';
 
-        // Show the correct meaning
         const correctMeaning = q.meaningOptions.find(o => o.correct);
         document.getElementById('quiz-explanation').textContent =
           `"${q.questionHu}" = "${correctMeaning.text}"`;
@@ -375,7 +411,6 @@ function handleOptionClick(card, selected, allOptions) {
 
         renderOptions(q.responseOptions);
       } else {
-        // Wrong meaning — still show step 2 for learning, but mark as incorrect
         quizStep = 2;
         document.getElementById('quiz-step-label').textContent =
           'Step 2: Choose the correct response (review)';
@@ -389,7 +424,6 @@ function handleOptionClick(card, selected, allOptions) {
       }
     }, 1200);
 
-    // Store step 1 result temporarily
     q._step1Correct = isCorrect;
   } else {
     // Step 2 complete — record full result
@@ -526,19 +560,18 @@ document.getElementById('btn-back-welcome').onclick = () => {
 };
 
 // ─── Settings Screen ───
-document.getElementById('btn-settings').onclick = () => {
+function initSettings() {
   const state = getState();
   document.getElementById('settings-api-key').value = state.apiKey || '';
-  document.getElementById('s-pd-name').value = state.personalDetails.name || '';
-  document.getElementById('s-pd-age').value = state.personalDetails.age || '';
-  document.getElementById('s-pd-job').value = state.personalDetails.job || '';
-  document.getElementById('s-pd-city').value = state.personalDetails.city || '';
-  document.getElementById('s-pd-family').value = state.personalDetails.family || '';
-  document.getElementById('s-pd-hobbies').value = state.personalDetails.hobbies || '';
-  document.getElementById('s-pd-other').value = state.personalDetails.other || '';
+  document.getElementById('s-about-me').value = state.aboutMeEssay || '';
   document.getElementById('speech-rate').value = state.settings.speechRate;
   document.getElementById('speech-rate-value').textContent = state.settings.speechRate;
   document.getElementById('auto-speak').checked = state.settings.autoSpeak;
+  renderTopicsEditor(state.interviewTopics || []);
+}
+
+document.getElementById('btn-settings').onclick = () => {
+  initSettings();
   showScreen('settings');
 };
 
@@ -552,24 +585,80 @@ document.getElementById('btn-settings-back').onclick = () => {
   showScreen(previousScreen === 'settings' ? 'quiz' : previousScreen);
 };
 
-document.getElementById('btn-save-details').onclick = () => {
-  const personalDetails = {
-    name: document.getElementById('s-pd-name').value.trim(),
-    age: document.getElementById('s-pd-age').value.trim(),
-    job: document.getElementById('s-pd-job').value.trim(),
-    city: document.getElementById('s-pd-city').value.trim(),
-    family: document.getElementById('s-pd-family').value.trim(),
-    hobbies: document.getElementById('s-pd-hobbies').value.trim(),
-    other: document.getElementById('s-pd-other').value.trim(),
-  };
-  setState({ personalDetails });
-  alert('Personal details saved!');
+document.getElementById('btn-save-essay').onclick = () => {
+  const aboutMeEssay = document.getElementById('s-about-me').value.trim();
+  setState({ aboutMeEssay });
+  alert('About Me saved!');
 };
 
 document.getElementById('speech-rate').oninput = (e) => {
   document.getElementById('speech-rate-value').textContent = e.target.value;
 };
 
+// ─── Topics Editor ───
+function renderTopicsEditor(topics) {
+  const container = document.getElementById('topics-editor');
+  container.innerHTML = '';
+
+  topics.forEach((topic, i) => {
+    const row = document.createElement('div');
+    row.className = 'topic-row';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'input topic-input';
+    input.value = topic;
+    input.onchange = () => {
+      const state = getState();
+      const updated = [...state.interviewTopics];
+      updated[i] = input.value.trim();
+      setState({ interviewTopics: updated });
+    };
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'btn btn-icon topic-remove';
+    removeBtn.textContent = '\u00D7';
+    removeBtn.title = 'Remove topic';
+    removeBtn.onclick = () => {
+      const state = getState();
+      const updated = state.interviewTopics.filter((_, idx) => idx !== i);
+      setState({ interviewTopics: updated });
+      renderTopicsEditor(updated);
+    };
+
+    row.appendChild(input);
+    row.appendChild(removeBtn);
+    container.appendChild(row);
+  });
+}
+
+document.getElementById('btn-add-topic').onclick = () => {
+  const input = document.getElementById('new-topic-input');
+  const value = input.value.trim();
+  if (!value) return;
+
+  const state = getState();
+  const updated = [...(state.interviewTopics || []), value];
+  setState({ interviewTopics: updated });
+  renderTopicsEditor(updated);
+  input.value = '';
+};
+
+document.getElementById('new-topic-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('btn-add-topic').click();
+  }
+});
+
+document.getElementById('btn-reset-topics').onclick = () => {
+  if (confirm('Reset interview topics to defaults?')) {
+    setState({ interviewTopics: [...DEFAULT_INTERVIEW_TOPICS] });
+    renderTopicsEditor([...DEFAULT_INTERVIEW_TOPICS]);
+  }
+};
+
+// ─── Data management ───
 document.getElementById('btn-export').onclick = () => {
   const data = exportState();
   const blob = new Blob([data], { type: 'application/json' });
@@ -612,13 +701,7 @@ document.getElementById('btn-reset').onclick = () => {
 
 // ─── Init ───
 function init() {
-  const state = getState();
   initWelcome();
-
-  // If we have questions, show continue option
-  if (state.questions && state.questions.length > 0) {
-    showScreen('welcome');
-  }
 }
 
 init();

@@ -2,22 +2,27 @@ import { TOPICS } from './curriculum.js';
 
 const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
-export async function generateQuestions(apiKey, level, personalDetails, count, onProgress) {
-  const batchSize = 10;
+/**
+ * Generate questions in batches. Calls onBatchReady with each batch of parsed questions
+ * so the caller can start the quiz early.
+ */
+export async function generateQuestions(apiKey, level, aboutMeEssay, interviewTopics, count, onProgress, onBatchReady) {
+  const batchSize = 5;
   const allQuestions = [];
-  const topics = TOPICS[level];
 
   for (let i = 0; i < count; i += batchSize) {
     const batchCount = Math.min(batchSize, count - i);
-    // Pick topics for this batch
+    // Pick curriculum topics for this batch
+    const curriculumTopics = TOPICS[level];
     const batchTopics = [];
     for (let j = 0; j < batchCount; j++) {
-      batchTopics.push(topics[(i + j) % topics.length]);
+      batchTopics.push(curriculumTopics[(i + j) % curriculumTopics.length]);
     }
 
-    const questions = await generateBatch(apiKey, level, personalDetails, batchTopics, batchCount);
+    const questions = await generateBatch(apiKey, level, aboutMeEssay, interviewTopics, batchTopics, batchCount);
     allQuestions.push(...questions);
     if (onProgress) onProgress(allQuestions.length);
+    if (onBatchReady) onBatchReady(questions, allQuestions.length);
 
     // Small delay between batches to respect rate limits
     if (i + batchSize < count) {
@@ -28,15 +33,15 @@ export async function generateQuestions(apiKey, level, personalDetails, count, o
   return allQuestions;
 }
 
-async function generateBatch(apiKey, level, pd, topics, count) {
-  const personalContext = buildPersonalContext(pd);
-  const topicList = topics.map((t, i) => `${i + 1}. ${t}`).join('\n');
+async function generateBatch(apiKey, level, aboutMeEssay, interviewTopics, curriculumTopics, count) {
+  const personalContext = buildPersonalContext(aboutMeEssay, interviewTopics);
+  const topicList = curriculumTopics.map((t, i) => `${i + 1}. ${t}`).join('\n');
 
-  const prompt = `You are a Hungarian language exam question generator. Generate exactly ${count} interview-style questions for a CEFR ${level} Hungarian language exam.
+  const prompt = `You are a Hungarian language exam question generator for a simplified naturalization interview. Generate exactly ${count} interview-style questions for a CEFR ${level} Hungarian language exam.
 
 ${personalContext}
 
-Topics to cover (one question per topic):
+Curriculum topics to cover (one question per topic):
 ${topicList}
 
 For each question, create:
@@ -50,7 +55,8 @@ IMPORTANT RULES:
 - Use natural, conversational Hungarian
 - Wrong options should be plausible (common mistakes learners make)
 - Responses should be complete sentences
-- If personal details are provided, incorporate them into questions and correct answers
+- If personal details are provided in the essay, incorporate them into questions and correct answers so the student practices answering about their own life
+- Also include questions about the interview topics listed above, especially about famous Hungarians, children, pets, hobbies, and other naturalization interview topics
 - Vary question types: yes/no, open-ended, choice questions
 
 Return ONLY a valid JSON array with this exact structure:
@@ -134,19 +140,21 @@ Return ONLY a valid JSON array with this exact structure:
   }
 }
 
-function buildPersonalContext(pd) {
-  if (!pd) return '';
+function buildPersonalContext(aboutMeEssay, interviewTopics) {
   const parts = [];
-  if (pd.name) parts.push(`The student's name is ${pd.name}`);
-  if (pd.age) parts.push(`they are ${pd.age} years old`);
-  if (pd.job) parts.push(`they work as a ${pd.job}`);
-  if (pd.city) parts.push(`they live in ${pd.city}`);
-  if (pd.family) parts.push(`family: ${pd.family}`);
-  if (pd.hobbies) parts.push(`hobbies: ${pd.hobbies}`);
-  if (pd.other) parts.push(`other details: ${pd.other}`);
 
-  if (parts.length === 0) return '';
-  return `STUDENT PERSONAL DETAILS (use these to personalize questions and correct answers):\n${parts.join(', ')}.`;
+  if (aboutMeEssay && aboutMeEssay.trim()) {
+    parts.push(`STUDENT'S PERSONAL ESSAY (use this to personalize questions and correct answers — ask about what they wrote):\n${aboutMeEssay.trim()}`);
+  }
+
+  if (interviewTopics && interviewTopics.length > 0) {
+    parts.push(`INTERVIEW TOPICS TO COVER (weave these into questions naturally, even if not in the essay):\n${interviewTopics.map((t, i) => `- ${t}`).join('\n')}`);
+  }
+
+  // Always add naturalization context
+  parts.push(`CONTEXT: This is preparation for a Hungarian simplified naturalization interview. The student needs to practice answering personal questions about their life, family, daily routine, and knowledge of Hungary.`);
+
+  return parts.join('\n\n');
 }
 
 async function fetchWithRetry(url, options, retries = 3) {
