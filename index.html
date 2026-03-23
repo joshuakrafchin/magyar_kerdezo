@@ -78,8 +78,19 @@
         </div>
       </div>
 
-      <button id="btn-start" class="btn btn-primary btn-large">Start Learning</button>
-      <button id="btn-continue" class="btn btn-secondary btn-large hidden">Continue Where You Left Off</button>
+      <div class="card">
+        <h2>Load Questions</h2>
+        <p class="hint">Generate with Gemini, or load a JSON file exported from the curriculum</p>
+        <div class="load-options">
+          <button id="btn-start" class="btn btn-primary btn-large">Generate with Gemini</button>
+          <div class="or-divider"><span>or</span></div>
+          <button id="btn-load-json" class="btn btn-secondary btn-large">Load Questions from JSON File</button>
+          <input type="file" id="load-json-file" accept=".json" class="hidden">
+          <div id="load-json-status" class="hint" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+      <button id="btn-continue" class="btn btn-primary btn-large hidden">Continue Where You Left Off</button>
 
       <p class="drive-link">
         📁 <a href="https://drive.google.com/drive/folders/1jCWvpsu-MmgYr712EtVBXnfcjK6OS4Vn" target="_blank">View curriculum on Google Drive</a>
@@ -119,6 +130,9 @@
       <div id="quiz-options" class="quiz-options"></div>
 
       <button id="btn-next" class="btn btn-primary hidden">Next Question →</button>
+      <div class="keyboard-hint">
+        <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> choose &nbsp; <kbd>Enter</kbd> next &nbsp; <kbd>R</kbd> replay audio
+      </div>
     </div>
 
     <!-- RESULTS SCREEN -->
