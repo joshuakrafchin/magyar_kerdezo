@@ -58,14 +58,76 @@ function initWelcome() {
   const btnContinue = document.getElementById('btn-continue');
   btnContinue.classList.toggle('hidden', !state.questions || state.questions.length === 0);
 
-  // Start button
+  // Start button (Gemini generation)
   document.getElementById('btn-start').onclick = () => startGeneration();
+
+  // Load JSON button
+  document.getElementById('btn-load-json').onclick = () => {
+    document.getElementById('load-json-file').click();
+  };
+  document.getElementById('load-json-file').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById('load-json-status');
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        const questions = normalizeImportedQuestions(data);
+        if (questions.length === 0) {
+          statusEl.textContent = 'No valid questions found in file.';
+          statusEl.style.color = 'var(--error)';
+          return;
+        }
+        saveWelcomeFields();
+        setState({ questions });
+        statusEl.textContent = `Loaded ${questions.length} questions!`;
+        statusEl.style.color = 'var(--success)';
+        setTimeout(() => startQuiz(), 500);
+      } catch (err) {
+        statusEl.textContent = 'Invalid JSON: ' + err.message;
+        statusEl.style.color = 'var(--error)';
+      }
+    };
+    reader.readAsText(file);
+    // Reset so same file can be re-selected
+    e.target.value = '';
+  };
 
   // Continue button
   btnContinue.onclick = () => {
     saveWelcomeFields();
     startQuiz();
   };
+}
+
+/**
+ * Normalize imported JSON questions into the app's internal format.
+ * Accepts either:
+ *   - An array of question objects directly
+ *   - An object with a "questions" array property
+ * Each question needs at minimum: questionHu, meaningOptions, responseOptions
+ */
+function normalizeImportedQuestions(data) {
+  let raw = Array.isArray(data) ? data : (data.questions || []);
+  return raw
+    .filter(q => q.questionHu && q.meaningOptions && q.responseOptions)
+    .map((q, i) => ({
+      id: q.id || `imported-${Date.now()}-${i}`,
+      level: q.level || 'A1',
+      topic: q.topic || 'imported',
+      questionHu: q.questionHu,
+      meaningOptions: q.meaningOptions,
+      responseOptions: q.responseOptions,
+      explanation: q.explanation || '',
+      repetition: q.repetition || {
+        interval: 0,
+        easeFactor: 2.5,
+        nextReview: 0,
+        consecutiveCorrect: 0,
+        attempts: 0,
+      },
+    }));
 }
 
 function saveWelcomeFields() {
@@ -220,9 +282,12 @@ function showQuestion() {
   renderOptions(q.meaningOptions);
 }
 
+let currentOptionCards = []; // track for keyboard access
+
 function renderOptions(options) {
   const container = document.getElementById('quiz-options');
   container.innerHTML = '';
+  currentOptionCards = [];
 
   const letters = ['A', 'B', 'C'];
   // Shuffle options
@@ -234,8 +299,45 @@ function renderOptions(options) {
     card.innerHTML = `<span class="option-letter">${letters[i]}</span><span>${opt.text}</span>`;
     card.onclick = () => handleOptionClick(card, opt, shuffled);
     container.appendChild(card);
+    currentOptionCards.push({ card, opt, allOptions: shuffled });
   });
 }
+
+// ─── Keyboard Shortcuts ───
+document.addEventListener('keydown', (e) => {
+  if (currentScreen !== 'quiz') return;
+
+  // 1/2/3 or A/B/C to pick an option
+  let idx = -1;
+  if (e.key === '1' || e.key.toLowerCase() === 'a') idx = 0;
+  if (e.key === '2' || e.key.toLowerCase() === 'b') idx = 1;
+  if (e.key === '3' || e.key.toLowerCase() === 'c') idx = 2;
+
+  if (idx >= 0 && idx < currentOptionCards.length) {
+    const { card, opt, allOptions } = currentOptionCards[idx];
+    if (!card.classList.contains('disabled')) {
+      handleOptionClick(card, opt, allOptions);
+    }
+    return;
+  }
+
+  // Enter or Space to advance to next question
+  if (e.key === 'Enter' || e.key === ' ') {
+    const btnNext = document.getElementById('btn-next');
+    if (!btnNext.classList.contains('hidden')) {
+      e.preventDefault();
+      sessionIndex++;
+      showQuestion();
+    }
+    return;
+  }
+
+  // R to replay audio
+  if (e.key.toLowerCase() === 'r') {
+    const q = sessionQuestions[sessionIndex];
+    if (q) speak(q.questionHu, getState().settings.speechRate);
+  }
+});
 
 function handleOptionClick(card, selected, allOptions) {
   const q = sessionQuestions[sessionIndex];
