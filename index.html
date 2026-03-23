@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Magyar Kérdező — Hungarian Exam Prep</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🇭🇺</text></svg>">
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+  <div id="app">
+    <!-- NAV -->
+    <nav id="nav" class="nav hidden">
+      <div class="nav-inner">
+        <h1 class="nav-title">Magyar Kérdező</h1>
+        <div class="nav-right">
+          <span id="nav-level" class="nav-level"></span>
+          <button id="btn-settings" class="btn-icon" title="Settings">⚙</button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- WELCOME SCREEN -->
+    <div id="screen-welcome" class="screen">
+      <div class="welcome-header">
+        <h1>Magyar Kérdező</h1>
+        <p class="subtitle">Hungarian Language Exam Prep</p>
+      </div>
+
+      <div class="card">
+        <h2>Gemini API Key</h2>
+        <p class="hint">Used to generate personalized questions. Get a key at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com</a></p>
+        <input type="password" id="input-api-key" class="input" placeholder="Paste your Gemini API key">
+      </div>
+
+      <div class="card">
+        <h2>Your Personal Details</h2>
+        <p class="hint">The interviewer will ask about these — fill in as much as you like</p>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="pd-name">Name</label>
+            <input type="text" id="pd-name" class="input" placeholder="e.g. Péter">
+          </div>
+          <div class="form-group">
+            <label for="pd-age">Age</label>
+            <input type="text" id="pd-age" class="input" placeholder="e.g. 30">
+          </div>
+          <div class="form-group">
+            <label for="pd-job">Job / Occupation</label>
+            <input type="text" id="pd-job" class="input" placeholder="e.g. software engineer">
+          </div>
+          <div class="form-group">
+            <label for="pd-city">City / Country</label>
+            <input type="text" id="pd-city" class="input" placeholder="e.g. Budapest">
+          </div>
+          <div class="form-group">
+            <label for="pd-family">Family</label>
+            <input type="text" id="pd-family" class="input" placeholder="e.g. married, 2 kids">
+          </div>
+          <div class="form-group">
+            <label for="pd-hobbies">Hobbies</label>
+            <input type="text" id="pd-hobbies" class="input" placeholder="e.g. hiking, cooking">
+          </div>
+          <div class="form-group full-width">
+            <label for="pd-other">Other details</label>
+            <textarea id="pd-other" class="input textarea" placeholder="Anything else you want to be asked about..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Starting Level</h2>
+        <div class="level-selector">
+          <button class="level-btn selected" data-level="A1">A1 — Beginner</button>
+          <button class="level-btn" data-level="A2">A2 — Elementary</button>
+          <button class="level-btn" data-level="B1">B1 — Intermediate</button>
+          <button class="level-btn" data-level="B2">B2 — Upper Intermediate</button>
+        </div>
+      </div>
+
+      <button id="btn-start" class="btn btn-primary btn-large">Start Learning</button>
+      <button id="btn-continue" class="btn btn-secondary btn-large hidden">Continue Where You Left Off</button>
+
+      <p class="drive-link">
+        📁 <a href="https://drive.google.com/drive/folders/1jCWvpsu-MmgYr712EtVBXnfcjK6OS4Vn" target="_blank">View curriculum on Google Drive</a>
+      </p>
+    </div>
+
+    <!-- LOADING SCREEN -->
+    <div id="screen-loading" class="screen hidden">
+      <div class="loading-container">
+        <div class="loading-icon">🇭🇺</div>
+        <h2>Generating Your Questions...</h2>
+        <p id="loading-status">Preparing A1 questions...</p>
+        <div class="progress-bar-container">
+          <div id="loading-progress" class="progress-bar-fill" style="width: 0%"></div>
+        </div>
+        <p id="loading-count">0 / 50 questions</p>
+      </div>
+    </div>
+
+    <!-- QUIZ SCREEN -->
+    <div id="screen-quiz" class="screen hidden">
+      <div class="quiz-progress">
+        <div class="quiz-progress-bar">
+          <div id="quiz-progress-fill" class="progress-bar-fill"></div>
+        </div>
+        <span id="quiz-progress-text" class="quiz-progress-text"></span>
+      </div>
+
+      <div class="quiz-question-card">
+        <div class="quiz-step-label" id="quiz-step-label">Step 1: What does this mean?</div>
+        <div class="quiz-question-text" id="quiz-question-text"></div>
+        <button id="btn-speak" class="btn-speak" title="Listen again">🔊</button>
+      </div>
+
+      <div id="quiz-explanation" class="quiz-explanation hidden"></div>
+
+      <div id="quiz-options" class="quiz-options"></div>
+
+      <button id="btn-next" class="btn btn-primary hidden">Next Question →</button>
+    </div>
+
+    <!-- RESULTS SCREEN -->
+    <div id="screen-results" class="screen hidden">
+      <div class="results-header">
+        <h2>Session Complete!</h2>
+      </div>
+      <div class="results-stats">
+        <div class="stat-card">
+          <div class="stat-number" id="stat-correct">0</div>
+          <div class="stat-label">Correct</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-incorrect">0</div>
+          <div class="stat-label">Incorrect</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-streak">0</div>
+          <div class="stat-label">Best Streak</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Level Progress</h3>
+        <div id="level-progress-bars"></div>
+      </div>
+
+      <div class="card" id="mistakes-review-card" style="display:none">
+        <h3>Review Mistakes</h3>
+        <div id="mistakes-list"></div>
+      </div>
+
+      <div class="results-actions">
+        <button id="btn-continue-quiz" class="btn btn-primary btn-large">Continue Practicing</button>
+        <button id="btn-new-session" class="btn btn-secondary">Generate New Questions</button>
+        <button id="btn-back-welcome" class="btn btn-secondary">Back to Home</button>
+      </div>
+    </div>
+
+    <!-- SETTINGS SCREEN -->
+    <div id="screen-settings" class="screen hidden">
+      <div class="settings-header">
+        <button id="btn-settings-back" class="btn-icon">←</button>
+        <h2>Settings</h2>
+      </div>
+
+      <div class="card">
+        <h3>API Key</h3>
+        <input type="password" id="settings-api-key" class="input" placeholder="Gemini API Key">
+      </div>
+
+      <div class="card">
+        <h3>Personal Details</h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="s-pd-name">Name</label>
+            <input type="text" id="s-pd-name" class="input">
+          </div>
+          <div class="form-group">
+            <label for="s-pd-age">Age</label>
+            <input type="text" id="s-pd-age" class="input">
+          </div>
+          <div class="form-group">
+            <label for="s-pd-job">Job</label>
+            <input type="text" id="s-pd-job" class="input">
+          </div>
+          <div class="form-group">
+            <label for="s-pd-city">City</label>
+            <input type="text" id="s-pd-city" class="input">
+          </div>
+          <div class="form-group">
+            <label for="s-pd-family">Family</label>
+            <input type="text" id="s-pd-family" class="input">
+          </div>
+          <div class="form-group">
+            <label for="s-pd-hobbies">Hobbies</label>
+            <input type="text" id="s-pd-hobbies" class="input">
+          </div>
+          <div class="form-group full-width">
+            <label for="s-pd-other">Other</label>
+            <textarea id="s-pd-other" class="input textarea"></textarea>
+          </div>
+        </div>
+        <button id="btn-save-details" class="btn btn-primary" style="margin-top:12px">Save Details</button>
+      </div>
+
+      <div class="card">
+        <h3>Speech</h3>
+        <div class="form-group">
+          <label for="speech-rate">Speech Rate: <span id="speech-rate-value">0.85</span></label>
+          <input type="range" id="speech-rate" min="0.5" max="1.5" step="0.05" value="0.85" class="range">
+        </div>
+        <label class="checkbox-label">
+          <input type="checkbox" id="auto-speak" checked> Auto-speak questions
+        </label>
+      </div>
+
+      <div class="card">
+        <h3>Data</h3>
+        <div class="settings-actions">
+          <button id="btn-export" class="btn btn-secondary">Export Data (JSON)</button>
+          <button id="btn-import" class="btn btn-secondary">Import Data</button>
+          <input type="file" id="import-file" accept=".json" class="hidden">
+          <button id="btn-reset" class="btn btn-danger">Reset All Progress</button>
+        </div>
+      </div>
+
+      <p class="drive-link">
+        📁 <a href="https://drive.google.com/drive/folders/1jCWvpsu-MmgYr712EtVBXnfcjK6OS4Vn" target="_blank">Curriculum on Google Drive</a>
+      </p>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
