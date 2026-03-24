@@ -1,5 +1,5 @@
 import { getState, setState, resetState, exportState, importState, DEFAULT_INTERVIEW_TOPICS } from './state.js';
-import { generateQuestions } from './gemini.js';
+import { generateQuestions, extractVocabulary } from './gemini.js';
 import { LEVELS, QUESTIONS_PER_LEVEL, getLevelIndex } from './curriculum.js';
 import { speak, stop } from './speech.js';
 import {
@@ -737,39 +737,36 @@ let vocabSelected = new Set();
 
 function getVocabList() {
   const state = getState();
-  const seen = new Map();
-  for (const q of state.questions) {
-    const correctMeaning = q.meaningOptions?.find(o => o.correct);
-    if (!correctMeaning) continue;
-    const key = q.questionHu;
-    if (!seen.has(key)) {
-      seen.set(key, {
-        hu: q.questionHu,
-        en: correctMeaning.text,
-        level: q.level,
-        id: q.id,
-      });
-    }
-  }
-  return [...seen.values()];
+  return state.vocabWords || [];
 }
 
 function isInFlashcards(hu) {
   const state = getState();
-  return state.flashcards.some(f => f.hu === hu);
+  return state.flashcards.some(f => f.hu.toLowerCase() === hu.toLowerCase());
 }
 
 function renderVocabList() {
   const container = document.getElementById('vocab-list');
   const emptyEl = document.getElementById('vocab-empty');
   const search = document.getElementById('vocab-search').value.toLowerCase();
-  const levelFilter = document.getElementById('vocab-level-filter').value;
 
   let vocab = getVocabList();
 
-  if (levelFilter !== 'all') {
-    vocab = vocab.filter(v => v.level === levelFilter);
+  // Update extract button text
+  const extractCard = document.getElementById('vocab-extract-card');
+  const state = getState();
+  const extractBtn = document.getElementById('btn-extract-vocab');
+  if (!extractBtn.disabled) {
+    if (vocab.length > 0) {
+      extractBtn.textContent =
+        `Re-extract Words (${state.questions.length} questions)`;
+    } else if (state.questions.length > 0) {
+      extractBtn.textContent =
+        `Extract Words from ${state.questions.length} Questions`;
+    }
   }
+  extractCard.style.display = state.questions.length > 0 ? '' : 'none';
+
   if (search) {
     vocab = vocab.filter(v =>
       v.hu.toLowerCase().includes(search) || v.en.toLowerCase().includes(search)
@@ -787,6 +784,9 @@ function renderVocabList() {
   emptyEl.classList.add('hidden');
   container.classList.remove('hidden');
 
+  // Sort alphabetically by Hungarian word
+  vocab.sort((a, b) => a.hu.localeCompare(b.hu, 'hu'));
+
   vocab.forEach(v => {
     const row = document.createElement('div');
     const inDeck = isInFlashcards(v.hu);
@@ -796,7 +796,6 @@ function renderVocabList() {
       <input type="checkbox" class="vocab-checkbox" ${vocabSelected.has(v.hu) ? 'checked' : ''}>
       <span class="vocab-hu">${v.hu}</span>
       <span class="vocab-en">${v.en}</span>
-      <span class="vocab-level-badge">${v.level}</span>
       ${inDeck ? '<span class="vocab-deck-badge">in deck</span>' : ''}
     `;
 
@@ -845,14 +844,69 @@ document.getElementById('btn-vocab-back').onclick = () => {
 };
 
 document.getElementById('vocab-search').oninput = () => renderVocabList();
-document.getElementById('vocab-level-filter').onchange = () => renderVocabList();
+
+// Extract vocabulary words from questions using Gemini
+document.getElementById('btn-extract-vocab').onclick = async () => {
+  const state = getState();
+  if (!state.apiKey) {
+    alert('Please set your Gemini API key first (on the home screen or in settings).');
+    return;
+  }
+  if (!state.questions || state.questions.length === 0) {
+    alert('No questions to extract words from. Generate questions first.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-extract-vocab');
+  const statusEl = document.getElementById('vocab-extract-status');
+  btn.disabled = true;
+  btn.textContent = 'Extracting...';
+  statusEl.classList.remove('hidden');
+  statusEl.style.color = 'var(--primary)';
+
+  try {
+    // Collect all unique Hungarian sentences (questions + correct responses)
+    const sentences = new Set();
+    for (const q of state.questions) {
+      sentences.add(q.questionHu);
+      const correctResponse = q.responseOptions?.find(o => o.correct);
+      if (correctResponse) sentences.add(correctResponse.text);
+    }
+
+    const sentenceArr = [...sentences];
+    statusEl.textContent = `Extracting words from ${sentenceArr.length} sentences...`;
+
+    const words = await extractVocabulary(state.apiKey, sentenceArr);
+
+    // Merge with existing vocab words (keep repetition data for existing ones)
+    const existing = new Map((state.vocabWords || []).map(w => [w.hu.toLowerCase(), w]));
+    const merged = words.map(w => {
+      const prev = existing.get(w.hu.toLowerCase());
+      return {
+        hu: w.hu,
+        en: w.en,
+        level: prev?.level || state.currentLevel,
+        repetition: prev?.repetition || undefined,
+      };
+    });
+
+    setState({ vocabWords: merged });
+    statusEl.textContent = `Extracted ${merged.length} words!`;
+    statusEl.style.color = 'var(--success)';
+    renderVocabList();
+  } catch (err) {
+    statusEl.textContent = `Error: ${err.message}`;
+    statusEl.style.color = 'var(--error)';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Extract Words from Questions';
+    renderVocabList();
+  }
+};
 
 document.getElementById('btn-select-all-vocab').onclick = () => {
-  const vocab = getVocabList();
   const search = document.getElementById('vocab-search').value.toLowerCase();
-  const levelFilter = document.getElementById('vocab-level-filter').value;
-  let filtered = vocab;
-  if (levelFilter !== 'all') filtered = filtered.filter(v => v.level === levelFilter);
+  let filtered = getVocabList();
   if (search) filtered = filtered.filter(v =>
     v.hu.toLowerCase().includes(search) || v.en.toLowerCase().includes(search)
   );
@@ -877,10 +931,13 @@ document.getElementById('btn-clear-flashcards').onclick = () => {
 
 function updateFcDeckCount() {
   const state = getState();
-  const count = state.flashcards?.length || 0;
-  document.getElementById('fc-deck-count').textContent = count;
+  const flashcards = state.flashcards || [];
+  const total = flashcards.length;
+  const mastered = flashcards.filter(f => isMastered(f.repetition || initRepetitionData())).length;
+  document.getElementById('fc-deck-count').textContent =
+    mastered > 0 ? `${total} (${mastered} mastered)` : total;
   const deckCard = document.getElementById('flashcard-deck-card');
-  if (deckCard) deckCard.style.display = count > 0 ? '' : 'none';
+  if (deckCard) deckCard.style.display = total > 0 ? '' : 'none';
 }
 
 document.getElementById('btn-add-to-flashcards').onclick = () => {
@@ -890,15 +947,14 @@ document.getElementById('btn-add-to-flashcards').onclick = () => {
   }
   const state = getState();
   const vocab = getVocabList();
-  const existingHu = new Set(state.flashcards.map(f => f.hu));
+  const existingHu = new Set(state.flashcards.map(f => f.hu.toLowerCase()));
   const newCards = [];
 
   for (const v of vocab) {
-    if (vocabSelected.has(v.hu) && !existingHu.has(v.hu)) {
+    if (vocabSelected.has(v.hu) && !existingHu.has(v.hu.toLowerCase())) {
       newCards.push({
         hu: v.hu,
         en: v.en,
-        level: v.level,
         repetition: initRepetitionData(),
       });
     }
@@ -909,7 +965,7 @@ document.getElementById('btn-add-to-flashcards').onclick = () => {
   }
 
   const skipped = vocabSelected.size - newCards.length;
-  let msg = `Added ${newCards.length} card${newCards.length !== 1 ? 's' : ''} to flashcards.`;
+  let msg = `Added ${newCards.length} word${newCards.length !== 1 ? 's' : ''} to flashcards.`;
   if (skipped > 0) msg += ` (${skipped} already in deck)`;
   alert(msg);
 
@@ -932,16 +988,16 @@ function startFlashcards() {
     return;
   }
 
-  // Select up to 10 cards prioritized by spaced repetition
+  // Select up to 10 cards — skip mastered words entirely (3x correct = done)
   const now = Date.now();
   const due = [];
   const fresh = [];
-  const mastered = [];
 
   for (const card of state.flashcards) {
     const rep = card.repetition || initRepetitionData();
     if (isMastered(rep)) {
-      if (rep.nextReview <= now) mastered.push(card);
+      // Skip mastered cards — they never come back
+      continue;
     } else if (rep.attempts === 0) {
       fresh.push(card);
     } else if (rep.nextReview <= now) {
@@ -949,21 +1005,24 @@ function startFlashcards() {
     }
   }
 
+  if (due.length === 0 && fresh.length === 0) {
+    const total = state.flashcards.length;
+    const masteredCount = state.flashcards.filter(f => isMastered(f.repetition || initRepetitionData())).length;
+    if (masteredCount === total) {
+      alert(`All ${total} flashcards mastered! Add more words from Vocabulary.`);
+    } else {
+      alert('No flashcards due for review right now. Try again later or add more words.');
+    }
+    return;
+  }
+
   due.sort((a, b) => (a.repetition?.easeFactor || 2.5) - (b.repetition?.easeFactor || 2.5));
 
   fcCards = [];
-  for (const pool of [due, fresh, mastered]) {
+  for (const pool of [due, fresh]) {
     for (const c of pool) {
       if (fcCards.length >= 10) break;
       fcCards.push(c);
-    }
-  }
-
-  // If still not enough, add any cards
-  if (fcCards.length < Math.min(10, state.flashcards.length)) {
-    for (const c of state.flashcards) {
-      if (fcCards.length >= 10) break;
-      if (!fcCards.includes(c)) fcCards.push(c);
     }
   }
 
@@ -1015,16 +1074,16 @@ function showFlashcard() {
     speak(card.hu, getState().settings.speechRate);
   };
 
-  // Generate 3 options: 1 correct + 2 wrong
-  const allCards = getState().flashcards;
-  const wrongPool = allCards.filter(c => c.hu !== card.hu).map(c => c.en);
-  // Also pull from questions if not enough
+  // Generate 3 options: 1 correct + 2 wrong from other flashcards/vocab
+  const state2 = getState();
+  const wrongPool = state2.flashcards
+    .filter(c => c.hu !== card.hu)
+    .map(c => c.en);
+  // Also pull from vocabWords if not enough
   if (wrongPool.length < 2) {
-    const state2 = getState();
-    for (const q of state2.questions) {
-      const m = q.meaningOptions?.find(o => o.correct);
-      if (m && m.text !== card.en && !wrongPool.includes(m.text)) {
-        wrongPool.push(m.text);
+    for (const w of (state2.vocabWords || [])) {
+      if (w.en !== card.en && !wrongPool.includes(w.en)) {
+        wrongPool.push(w.en);
       }
     }
   }

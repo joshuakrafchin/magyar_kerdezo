@@ -140,6 +140,86 @@ Return ONLY a valid JSON array with this exact structure:
   }
 }
 
+/**
+ * Extract individual vocabulary words from Hungarian sentences.
+ * Returns array of {hu, en} objects.
+ */
+export async function extractVocabulary(apiKey, sentences) {
+  const batchSize = 20;
+  const allWords = [];
+
+  for (let i = 0; i < sentences.length; i += batchSize) {
+    const batch = sentences.slice(i, i + batchSize);
+    const words = await extractVocabBatch(apiKey, batch);
+    allWords.push(...words);
+
+    if (i + batchSize < sentences.length) {
+      await sleep(1000);
+    }
+  }
+
+  // Deduplicate by Hungarian word (lowercase)
+  const seen = new Map();
+  for (const w of allWords) {
+    const key = w.hu.toLowerCase();
+    if (!seen.has(key)) {
+      seen.set(key, w);
+    }
+  }
+  return [...seen.values()];
+}
+
+async function extractVocabBatch(apiKey, sentences) {
+  const numbered = sentences.map((s, i) => `${i + 1}. ${s}`).join('\n');
+
+  const prompt = `Extract ALL individual vocabulary words and short phrases from these Hungarian sentences. For each word, provide the dictionary form (lemma) in Hungarian and its English translation.
+
+Sentences:
+${numbered}
+
+Rules:
+- Extract every meaningful word (nouns, verbs, adjectives, adverbs, pronouns, prepositions, question words)
+- Use the dictionary/base form (infinitive for verbs, nominative singular for nouns)
+- Skip proper nouns (names of people, specific places) unless they are common Hungarian words
+- Include common phrases that are better learned as a unit (e.g. "hogy van" = "how are you")
+- Do NOT include articles (a, az, egy) by themselves
+- Each word should appear only once even if it appears in multiple sentences
+
+Return ONLY a valid JSON array:
+[{"hu": "word", "en": "translation"}, ...]`;
+
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0.3,
+    },
+  };
+
+  const response = await fetchWithRetry(`${API_URL}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Gemini API error (${response.status}): ${err}`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) return [];
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    const match = text.match(/\[[\s\S]*\]/);
+    if (match) return JSON.parse(match[0]);
+    return [];
+  }
+}
+
 function buildPersonalContext(aboutMeEssay, interviewTopics) {
   const parts = [];
 

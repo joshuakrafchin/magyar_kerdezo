@@ -160,16 +160,15 @@
         <h2>Vocabulary</h2>
       </div>
 
+      <div id="vocab-extract-card" class="card">
+        <p class="hint" style="margin-bottom:8px">Extract individual words from your question sentences using Gemini</p>
+        <button id="btn-extract-vocab" class="btn btn-primary" style="width:100%">Extract Words from Questions</button>
+        <div id="vocab-extract-status" class="hint hidden" style="margin-top:8px;text-align:center"></div>
+      </div>
+
       <div class="vocab-controls">
         <div class="vocab-filter-row">
           <input type="text" id="vocab-search" class="input" placeholder="Search Hungarian or English...">
-          <select id="vocab-level-filter" class="input vocab-select">
-            <option value="all">All Levels</option>
-            <option value="A1">A1</option>
-            <option value="A2">A2</option>
-            <option value="B1">B1</option>
-            <option value="B2">B2</option>
-          </select>
         </div>
         <div class="vocab-actions-row">
           <button id="btn-select-all-vocab" class="btn btn-secondary btn-small">Select All</button>
@@ -180,7 +179,7 @@
       </div>
 
       <div id="vocab-list" class="vocab-list"></div>
-      <p id="vocab-empty" class="hint hidden" style="text-align:center;padding:40px 0">No vocabulary yet. Generate or load questions first.</p>
+      <p id="vocab-empty" class="hint hidden" style="text-align:center;padding:40px 0">No words yet. Click "Extract Words" above to build your vocabulary list.</p>
 
       <div class="card" id="flashcard-deck-card" style="margin-top:16px">
         <h3>Flashcard Deck <span id="fc-deck-count" class="vocab-level-badge">0</span></h3>

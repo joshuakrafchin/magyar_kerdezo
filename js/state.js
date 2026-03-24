@@ -27,6 +27,7 @@ const defaultState = {
   interviewTopics: [...DEFAULT_INTERVIEW_TOPICS],
   currentLevel: 'A1',
   questions: [],
+  vocabWords: [],
   flashcards: [],
   session: {
     currentIndex: 0,
