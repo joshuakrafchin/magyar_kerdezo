@@ -52,9 +52,10 @@ async function handleCallback(code) {
     const isSeed = email === SEED_EMAIL.toLowerCase();
     const role = isSeed ? 'admin' : 'user';
 
-    // Find who invited them
+    // Find who invited them - use null if invited by SYSTEM (no real user)
     const invitation = stmts.isInvited.get(email);
-    stmts.createUser.run(id, email, name, picture, role, invitation ? 'SYSTEM' : null);
+    const invitedBy = invitation && invitation.invited_by !== 'SYSTEM' ? invitation.invited_by : null;
+    stmts.createUser.run(id, email, name, picture, role, invitedBy);
     user = stmts.findUserById.get(id);
   }
 
