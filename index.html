@@ -9,6 +9,21 @@
 </head>
 <body>
   <div id="app">
+    <!-- LOGIN SCREEN -->
+    <div id="screen-login" class="screen">
+      <div class="welcome-header">
+        <h1>Magyar Kérdező</h1>
+        <p class="subtitle">Hungarian Naturalization Interview Prep</p>
+      </div>
+      <div class="card login-card">
+        <h2>Login</h2>
+        <p class="hint">Enter your password to continue</p>
+        <input type="password" id="login-password" class="input" placeholder="Password" autocomplete="current-password">
+        <div id="login-error" class="login-error hidden"></div>
+        <button id="btn-login" class="btn btn-primary btn-large" style="margin-top:12px;width:100%">Log In</button>
+      </div>
+    </div>
+
     <!-- NAV -->
     <nav id="nav" class="nav hidden">
       <div class="nav-inner">
@@ -16,21 +31,16 @@
         <div class="nav-right">
           <span id="nav-level" class="nav-level"></span>
           <button id="btn-settings" class="btn-icon" title="Settings">&#9881;</button>
+          <button id="btn-logout" class="btn-icon" title="Log out">&#x2386;</button>
         </div>
       </div>
     </nav>
 
     <!-- WELCOME SCREEN -->
-    <div id="screen-welcome" class="screen">
+    <div id="screen-welcome" class="screen hidden">
       <div class="welcome-header">
         <h1>Magyar Kérdező</h1>
         <p class="subtitle">Hungarian Naturalization Interview Prep</p>
-      </div>
-
-      <div class="card">
-        <h2>Gemini API Key</h2>
-        <p class="hint">Used to generate personalized questions. Get a key at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com</a></p>
-        <input type="password" id="input-api-key" class="input" placeholder="Paste your Gemini API key">
       </div>
 
       <div class="card">
@@ -156,11 +166,6 @@
       <div class="settings-header">
         <button id="btn-settings-back" class="btn-icon">&#8592;</button>
         <h2>Settings</h2>
-      </div>
-
-      <div class="card">
-        <h3>API Key</h3>
-        <input type="password" id="settings-api-key" class="input" placeholder="Gemini API Key">
       </div>
 
       <div class="card">
