@@ -18,7 +18,6 @@ const DEFAULT_INTERVIEW_TOPICS = [
 ];
 
 const defaultState = {
-  apiKey: '',
   aboutMeEssay: '',
   // Keep personalDetails for backward compat migration
   personalDetails: {

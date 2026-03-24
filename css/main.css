@@ -151,6 +151,25 @@ body {
   background: var(--bg);
 }
 
+/* LOGIN */
+.login-card {
+  max-width: 360px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.login-card .input {
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+.login-error {
+  color: var(--error);
+  font-size: 0.85rem;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
 /* SCREENS */
 .screen {
   max-width: var(--max-width);

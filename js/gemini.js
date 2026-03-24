@@ -1,12 +1,13 @@
 import { TOPICS } from './curriculum.js';
+import { authHeaders } from './auth.js';
 
-const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const API_URL = '/api/gemini';
 
 /**
  * Generate questions in batches. Calls onBatchReady with each batch of parsed questions
  * so the caller can start the quiz early.
  */
-export async function generateQuestions(apiKey, level, aboutMeEssay, interviewTopics, count, onProgress, onBatchReady) {
+export async function generateQuestions(level, aboutMeEssay, interviewTopics, count, onProgress, onBatchReady) {
   const batchSize = 5;
   const allQuestions = [];
 
@@ -19,7 +20,7 @@ export async function generateQuestions(apiKey, level, aboutMeEssay, interviewTo
       batchTopics.push(curriculumTopics[(i + j) % curriculumTopics.length]);
     }
 
-    const questions = await generateBatch(apiKey, level, aboutMeEssay, interviewTopics, batchTopics, batchCount);
+    const questions = await generateBatch(level, aboutMeEssay, interviewTopics, batchTopics, batchCount);
     allQuestions.push(...questions);
     if (onProgress) onProgress(allQuestions.length);
     if (onBatchReady) onBatchReady(questions, allQuestions.length);
@@ -33,7 +34,7 @@ export async function generateQuestions(apiKey, level, aboutMeEssay, interviewTo
   return allQuestions;
 }
 
-async function generateBatch(apiKey, level, aboutMeEssay, interviewTopics, curriculumTopics, count) {
+async function generateBatch(level, aboutMeEssay, interviewTopics, curriculumTopics, count) {
   const personalContext = buildPersonalContext(aboutMeEssay, interviewTopics);
   const topicList = curriculumTopics.map((t, i) => `${i + 1}. ${t}`).join('\n');
 
@@ -86,9 +87,12 @@ Return ONLY a valid JSON array with this exact structure:
     },
   };
 
-  const response = await fetchWithRetry(`${API_URL}?key=${apiKey}`, {
+  const response = await fetchWithRetry(API_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+    },
     body: JSON.stringify(body),
   });
 
