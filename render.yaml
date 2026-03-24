@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: magyar-kerdezo
+    runtime: node
+    buildCommand: npm ci --production
+    startCommand: node server/index.js
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_URL
+        fromService:
+          type: web
+          name: magyar-kerdezo
+          property: url
+      - key: DB_PATH
+        value: /var/data/magyar.db
+    disk:
+      name: magyar-data
+      mountPath: /var/data
+      sizeGB: 1
