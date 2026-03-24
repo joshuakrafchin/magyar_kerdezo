@@ -83,6 +83,13 @@
         <span class="bg-loading-spinner"></span>
         <span id="bg-loading-text">Loading more questions in background...</span>
       </div>
+      <div class="hard-mode-toggle">
+        <label class="toggle-label" for="hard-mode-checkbox">
+          <input type="checkbox" id="hard-mode-checkbox">
+          <span class="toggle-switch"></span>
+          <span class="toggle-text">Hard Mode <span class="toggle-desc">(listen only)</span></span>
+        </label>
+      </div>
       <div class="quiz-progress">
         <div class="quiz-progress-bar">
           <div id="quiz-progress-fill" class="progress-bar-fill"></div>
@@ -128,6 +135,7 @@
 
       <div class="card">
         <h3>Level Progress</h3>
+        <p class="hint mastered-hint">Mastered = answered correctly 3 times in a row. At 80% mastery, you advance to the next level.</p>
         <div id="level-progress-bars"></div>
       </div>
 
