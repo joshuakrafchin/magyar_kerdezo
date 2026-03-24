@@ -15,6 +15,7 @@ const screens = ['welcome', 'loading', 'quiz', 'results', 'settings'];
 let currentScreen = 'welcome';
 let previousScreen = 'welcome';
 let backgroundGenerating = false;
+let hardMode = false;
 
 function showScreen(name) {
   previousScreen = currentScreen;
@@ -300,14 +301,22 @@ function showQuestion() {
     `${sessionIndex + 1} / ${sessionQuestions.length}`;
 
   // Show question
-  document.getElementById('quiz-step-label').textContent = 'Step 1: What does this mean?';
-  document.getElementById('quiz-question-text').textContent = q.questionHu;
+  const questionTextEl = document.getElementById('quiz-question-text');
+  if (hardMode) {
+    document.getElementById('quiz-step-label').textContent = 'Step 1: What did you hear?';
+    questionTextEl.textContent = '🔊 Listen...';
+    questionTextEl.classList.add('hard-mode-hidden');
+  } else {
+    document.getElementById('quiz-step-label').textContent = 'Step 1: What does this mean?';
+    questionTextEl.textContent = q.questionHu;
+    questionTextEl.classList.remove('hard-mode-hidden');
+  }
   document.getElementById('quiz-explanation').classList.add('hidden');
   document.getElementById('btn-next').classList.add('hidden');
 
-  // Speak
+  // Speak — always auto-speak in hard mode
   const state = getState();
-  if (state.settings.autoSpeak) {
+  if (state.settings.autoSpeak || hardMode) {
     speak(q.questionHu, state.settings.speechRate);
   }
 
@@ -400,6 +409,11 @@ function handleOptionClick(card, selected, allOptions) {
     const isCorrect = selected.correct;
 
     setTimeout(() => {
+      // Reveal text in hard mode after step 1
+      const questionTextEl = document.getElementById('quiz-question-text');
+      questionTextEl.textContent = q.questionHu;
+      questionTextEl.classList.remove('hard-mode-hidden');
+
       if (isCorrect) {
         quizStep = 2;
         document.getElementById('quiz-step-label').textContent = 'Step 2: Choose the correct response';
@@ -699,8 +713,34 @@ document.getElementById('btn-reset').onclick = () => {
   }
 };
 
+// ─── Hard Mode Toggle ───
+document.getElementById('hard-mode-checkbox').onchange = (e) => {
+  hardMode = e.target.checked;
+  // Persist preference
+  setState({ settings: { ...getState().settings, hardMode } });
+  // If mid-question on step 1, update display immediately
+  if (currentScreen === 'quiz' && quizStep === 1 && sessionQuestions[sessionIndex]) {
+    const q = sessionQuestions[sessionIndex];
+    const questionTextEl = document.getElementById('quiz-question-text');
+    if (hardMode) {
+      questionTextEl.textContent = '🔊 Listen...';
+      questionTextEl.classList.add('hard-mode-hidden');
+      document.getElementById('quiz-step-label').textContent = 'Step 1: What did you hear?';
+      speak(q.questionHu, getState().settings.speechRate);
+    } else {
+      questionTextEl.textContent = q.questionHu;
+      questionTextEl.classList.remove('hard-mode-hidden');
+      document.getElementById('quiz-step-label').textContent = 'Step 1: What does this mean?';
+    }
+  }
+};
+
 // ─── Init ───
 function init() {
+  const state = getState();
+  // Restore hard mode preference
+  hardMode = state.settings.hardMode || false;
+  document.getElementById('hard-mode-checkbox').checked = hardMode;
   initWelcome();
 }
 
