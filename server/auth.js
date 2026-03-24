@@ -1,0 +1,107 @@
+const { OAuth2Client } = require('google-auth-library');
+const jwt = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
+const { stmts, SEED_EMAIL } = require('./db');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+const TOKEN_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function getGoogleClient() {
+  return new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    `${process.env.APP_URL}/auth/callback`
+  );
+}
+
+function getAuthUrl() {
+  const client = getGoogleClient();
+  return client.generateAuthUrl({
+    access_type: 'offline',
+    scope: ['openid', 'email', 'profile'],
+    prompt: 'select_account',
+  });
+}
+
+async function handleCallback(code) {
+  const client = getGoogleClient();
+  const { tokens } = await client.getToken(code);
+  client.setCredentials(tokens);
+
+  // Verify the ID token
+  const ticket = await client.verifyIdToken({
+    idToken: tokens.id_token,
+    audience: process.env.GOOGLE_CLIENT_ID,
+  });
+
+  const payload = ticket.getPayload();
+  const email = payload.email.toLowerCase();
+  const name = payload.name;
+  const picture = payload.picture;
+
+  // Check if user is invited
+  const invited = stmts.isInvited.get(email);
+  if (!invited) {
+    return { error: 'not_invited', email };
+  }
+
+  // Find or create user
+  let user = stmts.findUserByEmail.get(email);
+  if (!user) {
+    const id = uuidv4();
+    const isSeed = email === SEED_EMAIL.toLowerCase();
+    const role = isSeed ? 'admin' : 'user';
+
+    // Find who invited them
+    const invitation = stmts.isInvited.get(email);
+    stmts.createUser.run(id, email, name, picture, role, invitation ? 'SYSTEM' : null);
+    user = stmts.findUserById.get(id);
+  }
+
+  // Create JWT
+  const token = jwt.sign(
+    { userId: user.id, email: user.email, role: user.role },
+    JWT_SECRET,
+    { expiresIn: '30d' }
+  );
+
+  return { token, user };
+}
+
+function verifyToken(token) {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
+
+function requireAuth(req, res, next) {
+  const token = req.cookies?.token;
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  const decoded = verifyToken(token);
+  if (!decoded) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+
+  // Attach user info to request
+  const user = stmts.findUserById.get(decoded.userId);
+  if (!user) {
+    return res.status(401).json({ error: 'User not found' });
+  }
+
+  req.user = user;
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
+}
+
+module.exports = { getAuthUrl, handleCallback, verifyToken, requireAuth, requireAdmin, TOKEN_MAX_AGE };
