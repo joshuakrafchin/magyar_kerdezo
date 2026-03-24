@@ -1,5 +1,5 @@
 import { getState, setState, resetState, exportState, importState, DEFAULT_INTERVIEW_TOPICS } from './state.js';
-import { generateQuestions, extractVocabulary } from './gemini.js';
+import { generateQuestions, extractVocabulary, translateWord } from './gemini.js';
 import { LEVELS, QUESTIONS_PER_LEVEL, getLevelIndex } from './curriculum.js';
 import { speak, stop } from './speech.js';
 import {
@@ -1251,6 +1251,170 @@ document.getElementById('hard-mode-checkbox').onchange = (e) => {
     }
   }
 };
+
+// ─── Selection Popup ───
+const selPopup = document.getElementById('selection-popup');
+const selWord = document.getElementById('selection-popup-word');
+const selAddBtn = document.getElementById('selection-popup-add');
+const selStatus = document.getElementById('selection-popup-status');
+let selTranslation = null; // cached {hu, en} from last translate
+
+function hideSelectionPopup() {
+  selPopup.classList.add('hidden');
+  selStatus.classList.add('hidden');
+  selTranslation = null;
+}
+
+function positionPopup(rect) {
+  const x = Math.min(
+    rect.left + rect.width / 2 - 80,
+    window.innerWidth - 200
+  );
+  const above = rect.top > 160;
+  selPopup.style.left = `${Math.max(8, x)}px`;
+  if (above) {
+    selPopup.style.top = '';
+    selPopup.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+  } else {
+    selPopup.style.bottom = '';
+    selPopup.style.top = `${rect.bottom + 8}px`;
+  }
+}
+
+async function showSelectionPopup(text, rect) {
+  const trimmed = text.trim().replace(/\s+/g, ' ');
+  if (!trimmed || trimmed.length > 80) return;
+
+  // Show popup immediately with word + loading state
+  selWord.textContent = `"${trimmed}"`;
+  selStatus.textContent = 'Translating...';
+  selStatus.className = 'selection-popup-status status-loading';
+  selStatus.classList.remove('hidden');
+  selAddBtn.disabled = true;
+  selAddBtn.textContent = 'Add to Study List';
+  selTranslation = null;
+  positionPopup(rect);
+  selPopup.classList.remove('hidden');
+
+  // Check if already in flashcards
+  const state = getState();
+  const alreadyInDeck = state.flashcards.some(
+    f => f.hu.toLowerCase() === trimmed.toLowerCase() ||
+         f.en.toLowerCase() === trimmed.toLowerCase()
+  );
+
+  // Translate via Gemini
+  if (!state.apiKey) {
+    selStatus.textContent = 'Set API key first';
+    selStatus.className = 'selection-popup-status status-err';
+    return;
+  }
+
+  try {
+    const result = await translateWord(state.apiKey, trimmed);
+    selTranslation = result;
+    selWord.innerHTML = `<strong>${result.hu}</strong> = ${result.en}`;
+
+    if (alreadyInDeck || state.flashcards.some(f => f.hu.toLowerCase() === result.hu.toLowerCase())) {
+      selStatus.textContent = 'Already in study list';
+      selStatus.className = 'selection-popup-status status-ok';
+      selAddBtn.disabled = true;
+    } else {
+      selStatus.classList.add('hidden');
+      selAddBtn.disabled = false;
+    }
+  } catch (err) {
+    selStatus.textContent = 'Translation failed';
+    selStatus.className = 'selection-popup-status status-err';
+  }
+}
+
+// Listen for text selection anywhere
+document.addEventListener('mouseup', (e) => {
+  // Ignore clicks on the popup itself
+  if (e.target.closest('.selection-popup')) return;
+
+  const sel = window.getSelection();
+  const text = sel?.toString()?.trim();
+  if (!text || text.length < 1) {
+    // Small delay to avoid hiding when clicking the add button
+    setTimeout(() => {
+      if (!selPopup.matches(':hover')) hideSelectionPopup();
+    }, 150);
+    return;
+  }
+
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  showSelectionPopup(text, rect);
+});
+
+// Touch support — show on selection change
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection();
+  const text = sel?.toString()?.trim();
+  if (!text || text.length < 1 || sel.rangeCount === 0) return;
+
+  // Only trigger on touch devices
+  if (!('ontouchstart' in window)) return;
+
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return;
+  showSelectionPopup(text, rect);
+});
+
+// Add to flashcards button
+selAddBtn.addEventListener('click', () => {
+  if (!selTranslation) return;
+
+  const state = getState();
+  const existing = state.flashcards.some(
+    f => f.hu.toLowerCase() === selTranslation.hu.toLowerCase()
+  );
+  if (existing) {
+    selStatus.textContent = 'Already in study list';
+    selStatus.className = 'selection-popup-status status-ok';
+    selStatus.classList.remove('hidden');
+    return;
+  }
+
+  // Add to flashcards
+  const newCard = {
+    hu: selTranslation.hu,
+    en: selTranslation.en,
+    repetition: initRepetitionData(),
+  };
+  setState({ flashcards: [...state.flashcards, newCard] });
+
+  // Also add to vocabWords if not there
+  const vocabWords = state.vocabWords || [];
+  if (!vocabWords.some(w => w.hu.toLowerCase() === selTranslation.hu.toLowerCase())) {
+    setState({ vocabWords: [...getState().vocabWords, { hu: selTranslation.hu, en: selTranslation.en }] });
+  }
+
+  selStatus.textContent = 'Added!';
+  selStatus.className = 'selection-popup-status status-ok';
+  selStatus.classList.remove('hidden');
+  selAddBtn.disabled = true;
+
+  // Update deck count if on vocab screen
+  if (currentScreen === 'vocab') {
+    updateFcDeckCount();
+    renderVocabList();
+  }
+
+  // Clear selection and hide after brief flash
+  setTimeout(() => {
+    window.getSelection()?.removeAllRanges();
+    hideSelectionPopup();
+  }, 800);
+});
+
+// Hide on scroll or escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideSelectionPopup();
+});
 
 // ─── Init ───
 function init() {

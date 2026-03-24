@@ -220,6 +220,51 @@ Return ONLY a valid JSON array:
   }
 }
 
+/**
+ * Translate a single word or short phrase (Hungarian ↔ English).
+ * Returns {hu, en} with the dictionary form.
+ */
+export async function translateWord(apiKey, word) {
+  const prompt = `Translate this word or short phrase. Determine if it is Hungarian or English.
+- If Hungarian: return the dictionary form (lemma) in Hungarian and its English translation
+- If English: return the English word and its Hungarian translation (dictionary form)
+
+Word: "${word}"
+
+Return ONLY valid JSON: {"hu": "hungarian_word", "en": "english_word"}`;
+
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      temperature: 0.1,
+    },
+  };
+
+  const response = await fetchWithRetry(`${API_URL}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`API error (${response.status})`);
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('No response');
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]);
+    throw new Error('Failed to parse translation');
+  }
+}
+
 function buildPersonalContext(aboutMeEssay, interviewTopics) {
   const parts = [];
 
