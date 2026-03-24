@@ -12,7 +12,7 @@ import {
 } from './spaced-repetition.js';
 
 // ─── Screen Management ───
-const screens = ['login', 'welcome', 'loading', 'quiz', 'results', 'settings'];
+const screens = ['login', 'welcome', 'loading', 'quiz', 'results', 'settings', 'vocab', 'flashcards', 'fc-results'];
 let currentScreen = 'login';
 let previousScreen = 'login';
 let backgroundGenerating = false;
@@ -26,7 +26,7 @@ function showScreen(name) {
   });
   const nav = document.getElementById('nav');
   nav.classList.toggle('hidden', name === 'welcome' || name === 'loading' || name === 'login');
-  if (name === 'quiz') updateNavLevel();
+  if (name === 'quiz' || name === 'flashcards') updateNavLevel();
 }
 
 function updateNavLevel() {
@@ -82,8 +82,10 @@ function initWelcome() {
   });
 
   // Show continue button if we have questions
+  const hasQuestions = state.questions && state.questions.length > 0;
   const btnContinue = document.getElementById('btn-continue');
-  btnContinue.classList.toggle('hidden', !state.questions || state.questions.length === 0);
+  btnContinue.classList.toggle('hidden', !hasQuestions);
+  document.getElementById('btn-vocab-welcome').classList.toggle('hidden', !hasQuestions);
 
   // Start button (Gemini generation)
   document.getElementById('btn-start').onclick = () => startGeneration();
@@ -376,7 +378,10 @@ function renderOptions(options) {
 
 // ─── Keyboard Shortcuts ───
 document.addEventListener('keydown', (e) => {
-  if (currentScreen !== 'quiz') return;
+  if (currentScreen !== 'quiz' && currentScreen !== 'flashcards') return;
+
+  const isFlashcard = currentScreen === 'flashcards';
+  const activeOptions = isFlashcard ? fcOptionCards : currentOptionCards;
 
   // 1/2/3 or A/B/C to pick an option
   let idx = -1;
@@ -384,29 +389,43 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '2' || e.key.toLowerCase() === 'b') idx = 1;
   if (e.key === '3' || e.key.toLowerCase() === 'c') idx = 2;
 
-  if (idx >= 0 && idx < currentOptionCards.length) {
-    const { card, opt, allOptions } = currentOptionCards[idx];
+  if (idx >= 0 && idx < activeOptions.length) {
+    const { card, opt, allOptions } = activeOptions[idx];
     if (!card.classList.contains('disabled')) {
-      handleOptionClick(card, opt, allOptions);
+      if (isFlashcard) {
+        handleFcClick(card, opt, allOptions);
+      } else {
+        handleOptionClick(card, opt, allOptions);
+      }
     }
     return;
   }
 
   // Enter or Space to advance to next question
   if (e.key === 'Enter' || e.key === ' ') {
-    const btnNext = document.getElementById('btn-next');
+    const btnNext = document.getElementById(isFlashcard ? 'fc-btn-next' : 'btn-next');
     if (!btnNext.classList.contains('hidden')) {
       e.preventDefault();
-      sessionIndex++;
-      showQuestion();
+      if (isFlashcard) {
+        fcIndex++;
+        showFlashcard();
+      } else {
+        sessionIndex++;
+        showQuestion();
+      }
     }
     return;
   }
 
   // R to replay audio
   if (e.key.toLowerCase() === 'r') {
-    const q = sessionQuestions[sessionIndex];
-    if (q) speak(q.questionHu, getState().settings.speechRate);
+    if (isFlashcard) {
+      const card = fcCards[fcIndex];
+      if (card) speak(card.hu, getState().settings.speechRate);
+    } else {
+      const q = sessionQuestions[sessionIndex];
+      if (q) speak(q.questionHu, getState().settings.speechRate);
+    }
   }
 });
 
@@ -733,6 +752,431 @@ document.getElementById('btn-reset').onclick = () => {
     showScreen('welcome');
     initWelcome();
   }
+};
+
+// ─── Vocab Screen ───
+let vocabSelected = new Set();
+
+function getVocabList() {
+  const state = getState();
+  const seen = new Map();
+  for (const q of state.questions) {
+    const correctMeaning = q.meaningOptions?.find(o => o.correct);
+    if (!correctMeaning) continue;
+    const key = q.questionHu;
+    if (!seen.has(key)) {
+      seen.set(key, {
+        hu: q.questionHu,
+        en: correctMeaning.text,
+        level: q.level,
+        id: q.id,
+      });
+    }
+  }
+  return [...seen.values()];
+}
+
+function isInFlashcards(hu) {
+  const state = getState();
+  return state.flashcards.some(f => f.hu === hu);
+}
+
+function renderVocabList() {
+  const container = document.getElementById('vocab-list');
+  const emptyEl = document.getElementById('vocab-empty');
+  const search = document.getElementById('vocab-search').value.toLowerCase();
+  const levelFilter = document.getElementById('vocab-level-filter').value;
+
+  let vocab = getVocabList();
+
+  if (levelFilter !== 'all') {
+    vocab = vocab.filter(v => v.level === levelFilter);
+  }
+  if (search) {
+    vocab = vocab.filter(v =>
+      v.hu.toLowerCase().includes(search) || v.en.toLowerCase().includes(search)
+    );
+  }
+
+  container.innerHTML = '';
+
+  if (vocab.length === 0) {
+    emptyEl.classList.remove('hidden');
+    container.classList.add('hidden');
+    return;
+  }
+
+  emptyEl.classList.add('hidden');
+  container.classList.remove('hidden');
+
+  vocab.forEach(v => {
+    const row = document.createElement('div');
+    const inDeck = isInFlashcards(v.hu);
+    row.className = `vocab-row${vocabSelected.has(v.hu) ? ' selected' : ''}${inDeck ? ' in-deck' : ''}`;
+
+    row.innerHTML = `
+      <input type="checkbox" class="vocab-checkbox" ${vocabSelected.has(v.hu) ? 'checked' : ''}>
+      <span class="vocab-hu">${v.hu}</span>
+      <span class="vocab-en">${v.en}</span>
+      <span class="vocab-level-badge">${v.level}</span>
+      ${inDeck ? '<span class="vocab-deck-badge">in deck</span>' : ''}
+    `;
+
+    const checkbox = row.querySelector('.vocab-checkbox');
+    const toggle = () => {
+      if (vocabSelected.has(v.hu)) {
+        vocabSelected.delete(v.hu);
+        row.classList.remove('selected');
+        checkbox.checked = false;
+      } else {
+        vocabSelected.add(v.hu);
+        row.classList.add('selected');
+        checkbox.checked = true;
+      }
+      updateVocabCount();
+    };
+
+    row.onclick = (e) => {
+      if (e.target === checkbox) return;
+      toggle();
+    };
+    checkbox.onchange = toggle;
+    container.appendChild(row);
+  });
+
+  updateVocabCount();
+}
+
+function updateVocabCount() {
+  document.getElementById('vocab-selected-count').textContent =
+    `${vocabSelected.size} selected`;
+}
+
+function openVocabScreen() {
+  vocabSelected.clear();
+  showScreen('vocab');
+  renderVocabList();
+  updateFcDeckCount();
+}
+
+document.getElementById('btn-vocab-nav').onclick = () => openVocabScreen();
+document.getElementById('btn-vocab-welcome').onclick = () => openVocabScreen();
+document.getElementById('btn-vocab-back').onclick = () => {
+  showScreen(previousScreen === 'vocab' ? 'welcome' : previousScreen);
+  if (currentScreen === 'welcome') initWelcome();
+};
+
+document.getElementById('vocab-search').oninput = () => renderVocabList();
+document.getElementById('vocab-level-filter').onchange = () => renderVocabList();
+
+document.getElementById('btn-select-all-vocab').onclick = () => {
+  const vocab = getVocabList();
+  const search = document.getElementById('vocab-search').value.toLowerCase();
+  const levelFilter = document.getElementById('vocab-level-filter').value;
+  let filtered = vocab;
+  if (levelFilter !== 'all') filtered = filtered.filter(v => v.level === levelFilter);
+  if (search) filtered = filtered.filter(v =>
+    v.hu.toLowerCase().includes(search) || v.en.toLowerCase().includes(search)
+  );
+  filtered.forEach(v => vocabSelected.add(v.hu));
+  renderVocabList();
+};
+
+document.getElementById('btn-deselect-all-vocab').onclick = () => {
+  vocabSelected.clear();
+  renderVocabList();
+};
+
+document.getElementById('btn-start-flashcards').onclick = () => startFlashcards();
+
+document.getElementById('btn-clear-flashcards').onclick = () => {
+  if (confirm('Remove all flashcards from your deck?')) {
+    setState({ flashcards: [] });
+    renderVocabList();
+    updateFcDeckCount();
+  }
+};
+
+function updateFcDeckCount() {
+  const state = getState();
+  const count = state.flashcards?.length || 0;
+  document.getElementById('fc-deck-count').textContent = count;
+  const deckCard = document.getElementById('flashcard-deck-card');
+  if (deckCard) deckCard.style.display = count > 0 ? '' : 'none';
+}
+
+document.getElementById('btn-add-to-flashcards').onclick = () => {
+  if (vocabSelected.size === 0) {
+    alert('Select some words first!');
+    return;
+  }
+  const state = getState();
+  const vocab = getVocabList();
+  const existingHu = new Set(state.flashcards.map(f => f.hu));
+  const newCards = [];
+
+  for (const v of vocab) {
+    if (vocabSelected.has(v.hu) && !existingHu.has(v.hu)) {
+      newCards.push({
+        hu: v.hu,
+        en: v.en,
+        level: v.level,
+        repetition: initRepetitionData(),
+      });
+    }
+  }
+
+  if (newCards.length > 0) {
+    setState({ flashcards: [...state.flashcards, ...newCards] });
+  }
+
+  const skipped = vocabSelected.size - newCards.length;
+  let msg = `Added ${newCards.length} card${newCards.length !== 1 ? 's' : ''} to flashcards.`;
+  if (skipped > 0) msg += ` (${skipped} already in deck)`;
+  alert(msg);
+
+  vocabSelected.clear();
+  renderVocabList();
+  updateFcDeckCount();
+};
+
+// ─── Flashcard Study Mode ───
+let fcCards = [];
+let fcIndex = 0;
+let fcStats = { correct: 0, incorrect: 0, bestStreak: 0, currentStreak: 0, mistakes: [] };
+let fcOptionCards = [];
+let fcHardMode = false;
+
+function startFlashcards() {
+  const state = getState();
+  if (!state.flashcards || state.flashcards.length === 0) {
+    alert('No flashcards yet! Go to Vocabulary to add some.');
+    return;
+  }
+
+  // Select up to 10 cards prioritized by spaced repetition
+  const now = Date.now();
+  const due = [];
+  const fresh = [];
+  const mastered = [];
+
+  for (const card of state.flashcards) {
+    const rep = card.repetition || initRepetitionData();
+    if (isMastered(rep)) {
+      if (rep.nextReview <= now) mastered.push(card);
+    } else if (rep.attempts === 0) {
+      fresh.push(card);
+    } else if (rep.nextReview <= now) {
+      due.push(card);
+    }
+  }
+
+  due.sort((a, b) => (a.repetition?.easeFactor || 2.5) - (b.repetition?.easeFactor || 2.5));
+
+  fcCards = [];
+  for (const pool of [due, fresh, mastered]) {
+    for (const c of pool) {
+      if (fcCards.length >= 10) break;
+      fcCards.push(c);
+    }
+  }
+
+  // If still not enough, add any cards
+  if (fcCards.length < Math.min(10, state.flashcards.length)) {
+    for (const c of state.flashcards) {
+      if (fcCards.length >= 10) break;
+      if (!fcCards.includes(c)) fcCards.push(c);
+    }
+  }
+
+  // Shuffle
+  for (let i = fcCards.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [fcCards[i], fcCards[j]] = [fcCards[j], fcCards[i]];
+  }
+
+  fcIndex = 0;
+  fcStats = { correct: 0, incorrect: 0, bestStreak: 0, currentStreak: 0, mistakes: [] };
+  showScreen('flashcards');
+  showFlashcard();
+}
+
+function showFlashcard() {
+  if (fcIndex >= fcCards.length) {
+    showFcResults();
+    return;
+  }
+
+  const card = fcCards[fcIndex];
+
+  document.getElementById('fc-progress-fill').style.width =
+    `${(fcIndex / fcCards.length) * 100}%`;
+  document.getElementById('fc-progress-text').textContent =
+    `${fcIndex + 1} / ${fcCards.length}`;
+
+  const questionTextEl = document.getElementById('fc-question-text');
+  if (fcHardMode) {
+    document.getElementById('fc-step-label').textContent = 'What did you hear?';
+    questionTextEl.textContent = '\uD83D\uDD0A Listen...';
+    questionTextEl.classList.add('hard-mode-hidden');
+  } else {
+    document.getElementById('fc-step-label').textContent = 'What does this mean?';
+    questionTextEl.textContent = card.hu;
+    questionTextEl.classList.remove('hard-mode-hidden');
+  }
+  document.getElementById('fc-explanation').classList.add('hidden');
+  document.getElementById('fc-btn-next').classList.add('hidden');
+
+  // Speak
+  const state = getState();
+  if (state.settings.autoSpeak || fcHardMode) {
+    speak(card.hu, state.settings.speechRate);
+  }
+
+  document.getElementById('fc-btn-speak').onclick = () => {
+    speak(card.hu, getState().settings.speechRate);
+  };
+
+  // Generate 3 options: 1 correct + 2 wrong
+  const allCards = getState().flashcards;
+  const wrongPool = allCards.filter(c => c.hu !== card.hu).map(c => c.en);
+  // Also pull from questions if not enough
+  if (wrongPool.length < 2) {
+    const state2 = getState();
+    for (const q of state2.questions) {
+      const m = q.meaningOptions?.find(o => o.correct);
+      if (m && m.text !== card.en && !wrongPool.includes(m.text)) {
+        wrongPool.push(m.text);
+      }
+    }
+  }
+
+  // Shuffle and pick 2 wrong
+  for (let i = wrongPool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [wrongPool[i], wrongPool[j]] = [wrongPool[j], wrongPool[i]];
+  }
+  const wrong = wrongPool.slice(0, 2);
+
+  const options = [
+    { text: card.en, correct: true },
+    ...wrong.map(w => ({ text: w, correct: false })),
+  ];
+
+  renderFcOptions(options);
+}
+
+function renderFcOptions(options) {
+  const container = document.getElementById('fc-options');
+  container.innerHTML = '';
+  fcOptionCards = [];
+
+  const letters = ['A', 'B', 'C'];
+  const shuffled = [...options].sort(() => Math.random() - 0.5);
+
+  shuffled.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'option-card';
+    btn.innerHTML = `<span class="option-letter">${letters[i]}</span><span>${opt.text}</span>`;
+    btn.onclick = () => handleFcClick(btn, opt, shuffled);
+    container.appendChild(btn);
+    fcOptionCards.push({ card: btn, opt, allOptions: shuffled });
+  });
+}
+
+function handleFcClick(btn, selected, allOptions) {
+  const card = fcCards[fcIndex];
+  const cards = document.querySelectorAll('#fc-options .option-card');
+
+  cards.forEach(c => c.classList.add('disabled'));
+  cards.forEach(c => {
+    const optText = c.querySelector('span:last-child').textContent;
+    const opt = allOptions.find(o => o.text === optText);
+    if (opt && opt.correct) c.classList.add('correct');
+  });
+
+  if (!selected.correct) {
+    btn.classList.add('incorrect');
+  }
+
+  // Reveal text in hard mode
+  const questionTextEl = document.getElementById('fc-question-text');
+  questionTextEl.textContent = card.hu;
+  questionTextEl.classList.remove('hard-mode-hidden');
+
+  const isCorrect = selected.correct;
+
+  // Show explanation
+  document.getElementById('fc-explanation').textContent =
+    `"${card.hu}" = "${card.en}"`;
+  document.getElementById('fc-explanation').classList.remove('hidden');
+
+  // Update spaced repetition for this flashcard
+  const state = getState();
+  const flashcards = [...state.flashcards];
+  const idx = flashcards.findIndex(f => f.hu === card.hu);
+  if (idx !== -1) {
+    const fc = { ...flashcards[idx] };
+    const rep = fc.repetition || initRepetitionData();
+    fc.repetition = isCorrect ? recordCorrect(rep) : recordIncorrect(rep);
+    flashcards[idx] = fc;
+    setState({ flashcards });
+  }
+
+  if (isCorrect) {
+    fcStats.correct++;
+    fcStats.currentStreak++;
+    fcStats.bestStreak = Math.max(fcStats.bestStreak, fcStats.currentStreak);
+  } else {
+    fcStats.incorrect++;
+    fcStats.currentStreak = 0;
+    fcStats.mistakes.push({ hu: card.hu, en: card.en });
+  }
+
+  document.getElementById('fc-btn-next').classList.remove('hidden');
+}
+
+document.getElementById('fc-btn-next').onclick = () => {
+  fcIndex++;
+  showFlashcard();
+};
+
+function showFcResults() {
+  stop();
+  showScreen('fc-results');
+  document.getElementById('fc-stat-correct').textContent = fcStats.correct;
+  document.getElementById('fc-stat-incorrect').textContent = fcStats.incorrect;
+  document.getElementById('fc-stat-streak').textContent = fcStats.bestStreak;
+
+  const mistakesCard = document.getElementById('fc-mistakes-card');
+  const mistakesList = document.getElementById('fc-mistakes-list');
+  if (fcStats.mistakes.length > 0) {
+    mistakesCard.style.display = '';
+    mistakesList.innerHTML = '';
+    fcStats.mistakes.forEach(m => {
+      const item = document.createElement('div');
+      item.className = 'mistake-item';
+      item.innerHTML = `
+        <div class="mistake-question">${m.hu}</div>
+        <div class="mistake-answer">${m.en}</div>
+      `;
+      mistakesList.appendChild(item);
+    });
+  } else {
+    mistakesCard.style.display = 'none';
+  }
+}
+
+document.getElementById('btn-fc-continue').onclick = () => startFlashcards();
+document.getElementById('btn-fc-to-vocab').onclick = () => openVocabScreen();
+document.getElementById('btn-fc-to-welcome').onclick = () => {
+  showScreen('welcome');
+  initWelcome();
+};
+
+// ─── Flashcard Hard Mode Toggle ───
+document.getElementById('fc-hard-mode-checkbox').onchange = (e) => {
+  fcHardMode = e.target.checked;
 };
 
 // ─── Hard Mode Toggle ───

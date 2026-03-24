@@ -30,6 +30,7 @@
         <h1 class="nav-title">Magyar Kérdező</h1>
         <div class="nav-right">
           <span id="nav-level" class="nav-level"></span>
+          <button id="btn-vocab-nav" class="btn-icon" title="Vocabulary">&#x1F4D6;</button>
           <button id="btn-settings" class="btn-icon" title="Settings">&#9881;</button>
           <button id="btn-logout" class="btn-icon" title="Log out">&#x2386;</button>
         </div>
@@ -72,6 +73,7 @@
       </div>
 
       <button id="btn-continue" class="btn btn-primary btn-large hidden">Continue Where You Left Off</button>
+      <button id="btn-vocab-welcome" class="btn btn-secondary btn-large hidden" style="margin-top:10px">Vocabulary &amp; Flashcards</button>
     </div>
 
     <!-- LOADING SCREEN -->
@@ -158,6 +160,109 @@
         <button id="btn-continue-quiz" class="btn btn-primary btn-large">Continue Practicing</button>
         <button id="btn-new-session" class="btn btn-secondary">Generate New Questions</button>
         <button id="btn-back-welcome" class="btn btn-secondary">Back to Home</button>
+      </div>
+    </div>
+
+    <!-- VOCAB SCREEN -->
+    <div id="screen-vocab" class="screen hidden">
+      <div class="settings-header">
+        <button id="btn-vocab-back" class="btn-icon">&#8592;</button>
+        <h2>Vocabulary</h2>
+      </div>
+
+      <div class="vocab-controls">
+        <div class="vocab-filter-row">
+          <input type="text" id="vocab-search" class="input" placeholder="Search Hungarian or English...">
+          <select id="vocab-level-filter" class="input vocab-select">
+            <option value="all">All Levels</option>
+            <option value="A1">A1</option>
+            <option value="A2">A2</option>
+            <option value="B1">B1</option>
+            <option value="B2">B2</option>
+          </select>
+        </div>
+        <div class="vocab-actions-row">
+          <button id="btn-select-all-vocab" class="btn btn-secondary btn-small">Select All</button>
+          <button id="btn-deselect-all-vocab" class="btn btn-secondary btn-small">Deselect All</button>
+          <span id="vocab-selected-count" class="vocab-count">0 selected</span>
+          <button id="btn-add-to-flashcards" class="btn btn-primary btn-small">Add to Flashcards</button>
+        </div>
+      </div>
+
+      <div id="vocab-list" class="vocab-list"></div>
+      <p id="vocab-empty" class="hint hidden" style="text-align:center;padding:40px 0">No vocabulary yet. Generate or load questions first.</p>
+
+      <div class="card" id="flashcard-deck-card" style="margin-top:16px">
+        <h3>Flashcard Deck <span id="fc-deck-count" class="vocab-level-badge">0</span></h3>
+        <p class="hint">Words you've added for focused practice</p>
+        <div class="results-actions" style="margin-top:12px">
+          <button id="btn-start-flashcards" class="btn btn-primary btn-large">Study Flashcards</button>
+          <button id="btn-clear-flashcards" class="btn btn-secondary btn-small">Clear All Flashcards</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FLASHCARDS SCREEN -->
+    <div id="screen-flashcards" class="screen hidden">
+      <div class="hard-mode-toggle">
+        <label class="toggle-label" for="fc-hard-mode-checkbox">
+          <input type="checkbox" id="fc-hard-mode-checkbox">
+          <span class="toggle-switch"></span>
+          <span class="toggle-text">Hard Mode <span class="toggle-desc">(listen only)</span></span>
+        </label>
+      </div>
+      <div class="quiz-progress">
+        <div class="quiz-progress-bar">
+          <div id="fc-progress-fill" class="progress-bar-fill"></div>
+        </div>
+        <span id="fc-progress-text" class="quiz-progress-text"></span>
+      </div>
+
+      <div class="quiz-question-card">
+        <div class="quiz-step-label" id="fc-step-label">What does this mean?</div>
+        <div class="quiz-question-text" id="fc-question-text"></div>
+        <button id="fc-btn-speak" class="btn-speak" title="Listen again">&#x1F50A;</button>
+      </div>
+
+      <div id="fc-explanation" class="quiz-explanation hidden"></div>
+
+      <div id="fc-options" class="quiz-options"></div>
+
+      <button id="fc-btn-next" class="btn btn-primary hidden">Next Card &#8594;</button>
+      <div class="keyboard-hint">
+        <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> choose &nbsp; <kbd>Enter</kbd> next &nbsp; <kbd>R</kbd> replay audio
+      </div>
+    </div>
+
+    <!-- FLASHCARD RESULTS SCREEN -->
+    <div id="screen-fc-results" class="screen hidden">
+      <div class="results-header">
+        <h2>Flashcard Session Complete!</h2>
+      </div>
+      <div class="results-stats">
+        <div class="stat-card">
+          <div class="stat-number" id="fc-stat-correct">0</div>
+          <div class="stat-label">Correct</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="fc-stat-incorrect">0</div>
+          <div class="stat-label">Incorrect</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="fc-stat-streak">0</div>
+          <div class="stat-label">Best Streak</div>
+        </div>
+      </div>
+
+      <div class="card" id="fc-mistakes-card" style="display:none">
+        <h3>Review Mistakes</h3>
+        <div id="fc-mistakes-list"></div>
+      </div>
+
+      <div class="results-actions">
+        <button id="btn-fc-continue" class="btn btn-primary btn-large">Continue Flashcards</button>
+        <button id="btn-fc-to-vocab" class="btn btn-secondary">Back to Vocabulary</button>
+        <button id="btn-fc-to-welcome" class="btn btn-secondary">Back to Home</button>
       </div>
     </div>
 

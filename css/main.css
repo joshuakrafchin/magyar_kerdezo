@@ -801,6 +801,121 @@ kbd {
   flex-shrink: 0;
 }
 
+/* VOCAB LIST */
+.vocab-controls {
+  margin-bottom: 16px;
+}
+
+.vocab-filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.vocab-filter-row .input:first-child {
+  flex: 1;
+}
+
+.vocab-select {
+  width: auto;
+  min-width: 110px;
+}
+
+.vocab-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.vocab-count {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.vocab-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.vocab-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.vocab-row:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.vocab-row.selected {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.vocab-row.in-deck {
+  border-color: var(--success);
+  background: var(--success-bg);
+}
+
+.vocab-checkbox {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+
+.vocab-hu {
+  font-weight: 700;
+  font-size: 0.95rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.vocab-en {
+  color: var(--text-light);
+  font-size: 0.85rem;
+  text-align: right;
+  flex: 1;
+}
+
+.vocab-level-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--primary-light);
+  color: var(--primary);
+  padding: 2px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.vocab-deck-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  background: var(--success-bg);
+  color: var(--success);
+  padding: 2px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
 /* RESPONSIVE */
 @media (max-width: 480px) {
   .form-grid {
