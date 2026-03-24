@@ -6,7 +6,7 @@ const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-
  * Generate questions in batches. Calls onBatchReady with each batch of parsed questions
  * so the caller can start the quiz early.
  */
-export async function generateQuestions(apiKey, level, aboutMeEssay, interviewTopics, count, onProgress, onBatchReady) {
+export async function generateQuestions(apiKey, level, aboutMeEssay, interviewTopics, count, onProgress, onBatchReady, onVocab) {
   const batchSize = 5;
   const allQuestions = [];
 
@@ -19,10 +19,11 @@ export async function generateQuestions(apiKey, level, aboutMeEssay, interviewTo
       batchTopics.push(curriculumTopics[(i + j) % curriculumTopics.length]);
     }
 
-    const questions = await generateBatch(apiKey, level, aboutMeEssay, interviewTopics, batchTopics, batchCount);
+    const { questions, vocabulary } = await generateBatch(apiKey, level, aboutMeEssay, interviewTopics, batchTopics, batchCount);
     allQuestions.push(...questions);
     if (onProgress) onProgress(allQuestions.length);
     if (onBatchReady) onBatchReady(questions, allQuestions.length);
+    if (onVocab && vocabulary.length > 0) onVocab(vocabulary);
 
     // Small delay between batches to respect rate limits
     if (i + batchSize < count) {
@@ -59,24 +60,32 @@ IMPORTANT RULES:
 - Also include questions about the interview topics listed above, especially about famous Hungarians, children, pets, hobbies, and other naturalization interview topics
 - Vary question types: yes/no, open-ended, choice questions
 
-Return ONLY a valid JSON array with this exact structure:
-[
-  {
-    "questionHu": "Hogy hívnak?",
-    "topic": "greetings and introductions",
-    "meaningOptions": [
-      {"text": "What is your name?", "correct": true},
-      {"text": "Where are you from?", "correct": false},
-      {"text": "How old are you?", "correct": false}
-    ],
-    "responseOptions": [
-      {"text": "Péternek hívnak.", "correct": true},
-      {"text": "Budapesten lakom.", "correct": false},
-      {"text": "Harminc éves vagyok.", "correct": false}
-    ],
-    "explanation": "'Hogy hívnak?' means 'What is your name?' (informal). The correct response uses the pattern '[Name]-nak/nek hívnak.'"
-  }
-]`;
+ALSO: Extract ALL individual vocabulary words from every Hungarian sentence (questions AND responses). For each word, give the dictionary form (lemma) and English translation. Include every meaningful word (nouns, verbs, adjectives, adverbs, pronouns, prepositions, question words). Use dictionary/base forms. Skip articles (a, az, egy) by themselves. Include common phrases that are better learned as a unit.
+
+Return ONLY a valid JSON object with this exact structure:
+{
+  "questions": [
+    {
+      "questionHu": "Hogy hívnak?",
+      "topic": "greetings and introductions",
+      "meaningOptions": [
+        {"text": "What is your name?", "correct": true},
+        {"text": "Where are you from?", "correct": false},
+        {"text": "How old are you?", "correct": false}
+      ],
+      "responseOptions": [
+        {"text": "Péternek hívnak.", "correct": true},
+        {"text": "Budapesten lakom.", "correct": false},
+        {"text": "Harminc éves vagyok.", "correct": false}
+      ],
+      "explanation": "'Hogy hívnak?' means 'What is your name?' (informal). The correct response uses the pattern '[Name]-nak/nek hívnak.'"
+    }
+  ],
+  "vocabulary": [
+    {"hu": "hív", "en": "to call"},
+    {"hu": "hogy", "en": "how"}
+  ]
+}`;
 
   const body = {
     contents: [{ parts: [{ text: prompt }] }],
@@ -104,37 +113,50 @@ Return ONLY a valid JSON array with this exact structure:
     throw new Error('No content returned from Gemini API');
   }
 
+  const mapQuestions = (arr) => arr.map((q, i) => ({
+    id: `${level}-${Date.now()}-${i}`,
+    level,
+    ...q,
+    repetition: {
+      interval: 0,
+      easeFactor: 2.5,
+      nextReview: 0,
+      consecutiveCorrect: 0,
+      attempts: 0,
+    },
+  }));
+
   try {
-    const questions = JSON.parse(text);
-    return questions.map((q, i) => ({
-      id: `${level}-${Date.now()}-${i}`,
-      level,
-      ...q,
-      repetition: {
-        interval: 0,
-        easeFactor: 2.5,
-        nextReview: 0,
-        consecutiveCorrect: 0,
-        attempts: 0,
-      },
-    }));
+    const parsed = JSON.parse(text);
+    // Handle {questions, vocabulary} format
+    if (parsed.questions && Array.isArray(parsed.questions)) {
+      return {
+        questions: mapQuestions(parsed.questions),
+        vocabulary: Array.isArray(parsed.vocabulary) ? parsed.vocabulary : [],
+      };
+    }
+    // Fallback: plain array (old format)
+    if (Array.isArray(parsed)) {
+      return { questions: mapQuestions(parsed), vocabulary: [] };
+    }
+    throw new Error('Unexpected format');
   } catch {
-    // Try to extract JSON from the response
-    const match = text.match(/\[[\s\S]*\]/);
-    if (match) {
-      const questions = JSON.parse(match[0]);
-      return questions.map((q, i) => ({
-        id: `${level}-${Date.now()}-${i}`,
-        level,
-        ...q,
-        repetition: {
-          interval: 0,
-          easeFactor: 2.5,
-          nextReview: 0,
-          consecutiveCorrect: 0,
-          attempts: 0,
-        },
-      }));
+    // Try to extract from response
+    const objMatch = text.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      try {
+        const parsed = JSON.parse(objMatch[0]);
+        if (parsed.questions) {
+          return {
+            questions: mapQuestions(parsed.questions),
+            vocabulary: Array.isArray(parsed.vocabulary) ? parsed.vocabulary : [],
+          };
+        }
+      } catch { /* fall through */ }
+    }
+    const arrMatch = text.match(/\[[\s\S]*\]/);
+    if (arrMatch) {
+      return { questions: mapQuestions(JSON.parse(arrMatch[0])), vocabulary: [] };
     }
     throw new Error('Failed to parse Gemini response as JSON');
   }
@@ -217,51 +239,6 @@ Return ONLY a valid JSON array:
     const match = text.match(/\[[\s\S]*\]/);
     if (match) return JSON.parse(match[0]);
     return [];
-  }
-}
-
-/**
- * Translate a single word or short phrase (Hungarian ↔ English).
- * Returns {hu, en} with the dictionary form.
- */
-export async function translateWord(apiKey, word) {
-  const prompt = `Translate this word or short phrase. Determine if it is Hungarian or English.
-- If Hungarian: return the dictionary form (lemma) in Hungarian and its English translation
-- If English: return the English word and its Hungarian translation (dictionary form)
-
-Word: "${word}"
-
-Return ONLY valid JSON: {"hu": "hungarian_word", "en": "english_word"}`;
-
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.1,
-    },
-  };
-
-  const response = await fetchWithRetry(`${API_URL}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`API error (${response.status})`);
-  }
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('No response');
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error('Failed to parse translation');
   }
 }
 

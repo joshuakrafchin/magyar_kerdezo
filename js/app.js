@@ -1,5 +1,5 @@
 import { getState, setState, resetState, exportState, importState, DEFAULT_INTERVIEW_TOPICS } from './state.js';
-import { generateQuestions, extractVocabulary, translateWord } from './gemini.js';
+import { generateQuestions, extractVocabulary } from './gemini.js';
 import { LEVELS, QUESTIONS_PER_LEVEL, getLevelIndex } from './curriculum.js';
 import { speak, stop } from './speech.js';
 import {
@@ -188,6 +188,10 @@ async function startGeneration() {
             // Update background banner
             updateBackgroundBanner(allQuestions.length, totalExpected);
           }
+        },
+        (batchVocab) => {
+          // Merge vocab words as they arrive from each batch
+          mergeVocabWords(batchVocab);
         }
       );
     }
@@ -733,6 +737,32 @@ document.getElementById('btn-reset').onclick = () => {
 
 // ─── Vocab Screen ───
 let vocabSelected = new Set();
+
+function mergeVocabWords(newWords) {
+  const state = getState();
+  const existing = new Map((state.vocabWords || []).map(w => [w.hu.toLowerCase(), w]));
+  for (const w of newWords) {
+    const key = w.hu.toLowerCase();
+    if (!existing.has(key)) {
+      existing.set(key, { hu: w.hu, en: w.en });
+    }
+  }
+  setState({ vocabWords: [...existing.values()] });
+}
+
+function lookupWord(text) {
+  const state = getState();
+  const words = state.vocabWords || [];
+  const lower = text.toLowerCase();
+  // Exact match
+  const exact = words.find(w => w.hu.toLowerCase() === lower || w.en.toLowerCase() === lower);
+  if (exact) return exact;
+  // Partial match (selected word might be inflected)
+  const partial = words.find(w =>
+    lower.startsWith(w.hu.toLowerCase()) || w.hu.toLowerCase().startsWith(lower)
+  );
+  return partial || null;
+}
 
 function getVocabList() {
   const state = getState();
@@ -1281,52 +1311,45 @@ function positionPopup(rect) {
   }
 }
 
-async function showSelectionPopup(text, rect) {
+function showSelectionPopup(text, rect) {
   const trimmed = text.trim().replace(/\s+/g, ' ');
   if (!trimmed || trimmed.length > 80) return;
 
-  // Show popup immediately with word + loading state
-  selWord.textContent = `"${trimmed}"`;
-  selStatus.textContent = 'Translating...';
-  selStatus.className = 'selection-popup-status status-loading';
-  selStatus.classList.remove('hidden');
-  selAddBtn.disabled = true;
+  // Local lookup — no API call
+  const match = lookupWord(trimmed);
+
   selAddBtn.textContent = 'Add to Study List';
   selTranslation = null;
   positionPopup(rect);
-  selPopup.classList.remove('hidden');
 
-  // Check if already in flashcards
-  const state = getState();
-  const alreadyInDeck = state.flashcards.some(
-    f => f.hu.toLowerCase() === trimmed.toLowerCase() ||
-         f.en.toLowerCase() === trimmed.toLowerCase()
-  );
+  if (match) {
+    selTranslation = match;
+    selWord.innerHTML = `<strong>${match.hu}</strong> = ${match.en}`;
 
-  // Translate via Gemini
-  if (!state.apiKey) {
-    selStatus.textContent = 'Set API key first';
-    selStatus.className = 'selection-popup-status status-err';
-    return;
-  }
+    const state = getState();
+    const alreadyInDeck = state.flashcards.some(
+      f => f.hu.toLowerCase() === match.hu.toLowerCase()
+    );
 
-  try {
-    const result = await translateWord(state.apiKey, trimmed);
-    selTranslation = result;
-    selWord.innerHTML = `<strong>${result.hu}</strong> = ${result.en}`;
-
-    if (alreadyInDeck || state.flashcards.some(f => f.hu.toLowerCase() === result.hu.toLowerCase())) {
+    if (alreadyInDeck) {
       selStatus.textContent = 'Already in study list';
       selStatus.className = 'selection-popup-status status-ok';
+      selStatus.classList.remove('hidden');
       selAddBtn.disabled = true;
     } else {
       selStatus.classList.add('hidden');
       selAddBtn.disabled = false;
     }
-  } catch (err) {
-    selStatus.textContent = 'Translation failed';
+  } else {
+    // Word not in our vocab — show it but allow adding as-is
+    selWord.textContent = `"${trimmed}"`;
+    selStatus.textContent = 'Not in vocabulary yet';
     selStatus.className = 'selection-popup-status status-err';
+    selStatus.classList.remove('hidden');
+    selAddBtn.disabled = true;
   }
+
+  selPopup.classList.remove('hidden');
 }
 
 // Listen for text selection anywhere
