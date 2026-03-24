@@ -2,7 +2,6 @@ import { getState, setState, resetState, exportState, importState, DEFAULT_INTER
 import { generateQuestions } from './gemini.js';
 import { LEVELS, QUESTIONS_PER_LEVEL, getLevelIndex } from './curriculum.js';
 import { speak, stop } from './speech.js';
-import { checkAuth, login, logout } from './auth.js';
 import {
   selectSessionQuestions,
   recordCorrect,
@@ -12,9 +11,9 @@ import {
 } from './spaced-repetition.js';
 
 // ─── Screen Management ───
-const screens = ['login', 'welcome', 'loading', 'quiz', 'results', 'settings', 'vocab', 'flashcards', 'fc-results'];
-let currentScreen = 'login';
-let previousScreen = 'login';
+const screens = ['welcome', 'loading', 'quiz', 'results', 'settings', 'vocab', 'flashcards', 'fc-results'];
+let currentScreen = 'welcome';
+let previousScreen = 'welcome';
 let backgroundGenerating = false;
 let hardMode = false;
 
@@ -25,7 +24,7 @@ function showScreen(name) {
     document.getElementById(`screen-${s}`).classList.toggle('hidden', s !== name);
   });
   const nav = document.getElementById('nav');
-  nav.classList.toggle('hidden', name === 'welcome' || name === 'loading' || name === 'login');
+  nav.classList.toggle('hidden', name === 'welcome' || name === 'loading');
   if (name === 'quiz' || name === 'flashcards') updateNavLevel();
 }
 
@@ -34,42 +33,12 @@ function updateNavLevel() {
   document.getElementById('nav-level').textContent = `Level: ${state.currentLevel}`;
 }
 
-// ─── Login Screen ───
-document.getElementById('btn-login').onclick = async () => {
-  const password = document.getElementById('login-password').value;
-  const errorEl = document.getElementById('login-error');
-  errorEl.classList.add('hidden');
-
-  try {
-    await login(password);
-    showScreen('welcome');
-    initWelcome();
-  } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.classList.remove('hidden');
-  }
-};
-
-document.getElementById('login-password').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    document.getElementById('btn-login').click();
-  }
-});
-
-// ─── Logout ───
-document.getElementById('btn-logout').onclick = async () => {
-  await logout();
-  showScreen('login');
-  document.getElementById('login-password').value = '';
-  document.getElementById('login-error').classList.add('hidden');
-};
-
 // ─── Welcome Screen ───
 function initWelcome() {
   const state = getState();
 
   // Populate fields from state
+  document.getElementById('input-api-key').value = state.apiKey || '';
   document.getElementById('about-me-essay').value = state.aboutMeEssay || '';
 
   // Level selector
@@ -155,15 +124,21 @@ function normalizeImportedQuestions(data) {
 }
 
 function saveWelcomeFields() {
+  const apiKey = document.getElementById('input-api-key').value.trim();
   const aboutMeEssay = document.getElementById('about-me-essay').value.trim();
   const selectedLevel = document.querySelector('.level-btn.selected')?.dataset.level || 'A1';
-  setState({ aboutMeEssay, currentLevel: selectedLevel });
+  setState({ apiKey, aboutMeEssay, currentLevel: selectedLevel });
 }
 
 // ─── Loading / Background Generation ───
 async function startGeneration() {
   saveWelcomeFields();
   const state = getState();
+
+  if (!state.apiKey) {
+    alert('Please enter your Gemini API key to generate questions.');
+    return;
+  }
 
   showScreen('loading');
 
@@ -186,6 +161,7 @@ async function startGeneration() {
       document.getElementById('loading-status').textContent = `Generating ${level} questions...`;
 
       await generateQuestions(
+        state.apiKey,
         level,
         state.aboutMeEssay,
         state.interviewTopics,
@@ -619,6 +595,7 @@ document.getElementById('btn-back-welcome').onclick = () => {
 // ─── Settings Screen ───
 function initSettings() {
   const state = getState();
+  document.getElementById('settings-api-key').value = state.apiKey || '';
   document.getElementById('s-about-me').value = state.aboutMeEssay || '';
   document.getElementById('speech-rate').value = state.settings.speechRate;
   document.getElementById('speech-rate-value').textContent = state.settings.speechRate;
@@ -633,9 +610,10 @@ document.getElementById('btn-settings').onclick = () => {
 
 document.getElementById('btn-settings-back').onclick = () => {
   // Save settings
+  const apiKey = document.getElementById('settings-api-key').value.trim();
   const speechRate = parseFloat(document.getElementById('speech-rate').value);
   const autoSpeak = document.getElementById('auto-speak').checked;
-  setState({ settings: { ...getState().settings, speechRate, autoSpeak } });
+  setState({ apiKey, settings: { ...getState().settings, speechRate, autoSpeak } });
 
   showScreen(previousScreen === 'settings' ? 'quiz' : previousScreen);
 };
@@ -1202,20 +1180,12 @@ document.getElementById('hard-mode-checkbox').onchange = (e) => {
 };
 
 // ─── Init ───
-async function init() {
+function init() {
   const state = getState();
   // Restore hard mode preference
   hardMode = state.settings.hardMode || false;
   document.getElementById('hard-mode-checkbox').checked = hardMode;
-
-  // Check if already authenticated
-  const isAuth = await checkAuth();
-  if (isAuth) {
-    showScreen('welcome');
-    initWelcome();
-  } else {
-    showScreen('login');
-  }
+  initWelcome();
 }
 
 init();
