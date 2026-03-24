@@ -898,6 +898,47 @@ kbd {
   flex-shrink: 0;
 }
 
+/* FLASH TRANSLATION */
+.flash-translation {
+  margin-top: 12px;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 1.1rem;
+  font-weight: 700;
+  animation: flashIn 0.25s ease;
+}
+
+.flash-translation.flash-correct {
+  background: var(--success-bg);
+  color: var(--success);
+  border: 2px solid var(--success);
+}
+
+.flash-translation.flash-incorrect {
+  background: var(--error-bg);
+  color: var(--error);
+  border: 2px solid var(--error);
+}
+
+@keyframes flashIn {
+  0% { opacity: 0; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.tap-hint {
+  text-align: center;
+  color: var(--text-light);
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-top: 12px;
+  animation: fadeIn 0.3s ease 0.3s both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 0.7; }
+}
+
 /* RESPONSIVE */
 @media (max-width: 480px) {
   .form-grid {

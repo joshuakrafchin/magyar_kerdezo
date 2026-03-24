@@ -379,13 +379,12 @@ document.addEventListener('keydown', (e) => {
 
   // Enter or Space to advance to next question
   if (e.key === 'Enter' || e.key === ' ') {
-    const btnNext = document.getElementById(isFlashcard ? 'fc-btn-next' : 'btn-next');
-    if (!btnNext.classList.contains('hidden')) {
-      e.preventDefault();
-      if (isFlashcard) {
-        fcIndex++;
-        showFlashcard();
-      } else {
+    e.preventDefault();
+    if (isFlashcard) {
+      advanceFlashcard();
+    } else {
+      const btnNext = document.getElementById('btn-next');
+      if (!btnNext.classList.contains('hidden')) {
         sessionIndex++;
         showQuestion();
       }
@@ -980,6 +979,7 @@ let fcIndex = 0;
 let fcStats = { correct: 0, incorrect: 0, bestStreak: 0, currentStreak: 0, mistakes: [] };
 let fcOptionCards = [];
 let fcHardMode = false;
+let fcWaitingForTap = false;
 
 function startFlashcards() {
   const state = getState();
@@ -1061,8 +1061,9 @@ function showFlashcard() {
     questionTextEl.textContent = card.hu;
     questionTextEl.classList.remove('hard-mode-hidden');
   }
-  document.getElementById('fc-explanation').classList.add('hidden');
-  document.getElementById('fc-btn-next').classList.add('hidden');
+  document.getElementById('fc-flash-translation').className = 'flash-translation hidden';
+  document.getElementById('fc-tap-hint').classList.add('hidden');
+  fcWaitingForTap = false;
 
   // Speak
   const state = getState();
@@ -1143,10 +1144,14 @@ function handleFcClick(btn, selected, allOptions) {
 
   const isCorrect = selected.correct;
 
-  // Show explanation
-  document.getElementById('fc-explanation').textContent =
-    `"${card.hu}" = "${card.en}"`;
-  document.getElementById('fc-explanation').classList.remove('hidden');
+  // Flash the translation on the question card
+  const flashEl = document.getElementById('fc-flash-translation');
+  flashEl.textContent = `= ${card.en}`;
+  flashEl.className = `flash-translation ${isCorrect ? 'flash-correct' : 'flash-incorrect'}`;
+
+  // Show tap hint
+  document.getElementById('fc-tap-hint').classList.remove('hidden');
+  fcWaitingForTap = true;
 
   // Update spaced repetition for this flashcard
   const state = getState();
@@ -1169,14 +1174,23 @@ function handleFcClick(btn, selected, allOptions) {
     fcStats.currentStreak = 0;
     fcStats.mistakes.push({ hu: card.hu, en: card.en });
   }
-
-  document.getElementById('fc-btn-next').classList.remove('hidden');
 }
 
-document.getElementById('fc-btn-next').onclick = () => {
+function advanceFlashcard() {
+  if (!fcWaitingForTap) return;
+  fcWaitingForTap = false;
+  document.getElementById('fc-tap-hint').classList.add('hidden');
+  document.getElementById('fc-flash-translation').className = 'flash-translation hidden';
   fcIndex++;
   showFlashcard();
-};
+}
+
+// Tap anywhere on flashcard screen to advance
+document.getElementById('screen-flashcards').addEventListener('click', (e) => {
+  // Don't advance if clicking an option or speak button
+  if (e.target.closest('.option-card') || e.target.closest('.btn-speak')) return;
+  advanceFlashcard();
+});
 
 function showFcResults() {
   stop();
