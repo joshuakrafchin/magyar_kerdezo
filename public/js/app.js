@@ -1559,4 +1559,4 @@ async function init() {
   initWelcome();
 }
 
-init();
+init().catch(err => console.error('Init failed:', err));
