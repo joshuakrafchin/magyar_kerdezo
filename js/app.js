@@ -1482,6 +1482,18 @@ document.addEventListener('mouseup', (e) => {
   showSelectionPopup(text, rect);
 });
 
+// Double-click to select a word and show popup
+document.addEventListener('dblclick', (e) => {
+  if (e.target.closest('.selection-popup')) return;
+  const sel = window.getSelection();
+  const text = sel?.toString()?.trim();
+  if (!text || text.length < 1 || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return;
+  showSelectionPopup(text, rect);
+});
+
 // Touch support — show on selection change
 document.addEventListener('selectionchange', () => {
   const sel = window.getSelection();
