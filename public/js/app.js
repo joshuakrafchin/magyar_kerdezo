@@ -621,6 +621,7 @@ document.getElementById('btn-back-welcome').onclick = () => {
 // ─── Settings Screen ───
 function populateVoiceSelect() {
   const select = document.getElementById('voice-select');
+  const hint = document.getElementById('voice-hint');
   const voices = listHungarianVoices();
   const currentURI = getState().settings.voiceURI || getVoiceURI();
   select.innerHTML = '';
@@ -630,6 +631,7 @@ function populateVoiceSelect() {
     opt.textContent = 'No Hungarian voices found';
     opt.value = '';
     select.appendChild(opt);
+    hint.textContent = 'Your browser has no Hungarian voices installed. Try Chrome on desktop for more options.';
     return;
   }
 
@@ -640,6 +642,12 @@ function populateVoiceSelect() {
     if (v.uri === currentURI) opt.selected = true;
     select.appendChild(opt);
   });
+
+  if (voices.length === 1) {
+    hint.textContent = 'Only 1 Hungarian voice available. On Android: Settings → Languages → Text-to-Speech → install more. On iOS/Mac: Settings → Accessibility → Spoken Content → Voices → Hungarian.';
+  } else {
+    hint.textContent = `${voices.length} Hungarian voices available.`;
+  }
 }
 
 function initSettings() {
