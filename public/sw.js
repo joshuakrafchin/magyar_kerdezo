@@ -1,4 +1,4 @@
-const CACHE_NAME = 'magyar-v1';
+const CACHE_NAME = 'magyar-v2';
 const STATIC_ASSETS = [
   '/',
   '/css/main.css',
@@ -35,19 +35,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Network-first for all requests
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      // Network first for HTML, cache first for assets
-      if (event.request.mode === 'navigate') {
-        return fetch(event.request).catch(() => cached || caches.match('/'));
-      }
-      return cached || fetch(event.request).then((response) => {
+    fetch(event.request)
+      .then((response) => {
         if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      });
-    })
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/')))
   );
 });
