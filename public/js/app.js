@@ -1531,8 +1531,15 @@ async function init() {
   }
 
   // Check auth
-  currentUser = await getMe();
+  console.log('[init] calling getMe...');
+  try {
+    currentUser = await getMe();
+  } catch (e) {
+    console.error('[init] getMe threw:', e);
+  }
+  console.log('[init] currentUser:', currentUser);
   if (!currentUser) {
+    console.log('[init] no user — showing login');
     showScreen('login');
     return;
   }

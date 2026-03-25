@@ -23,8 +23,11 @@ async function apiFetch(url, options = {}) {
 
 export async function getMe() {
   const res = await apiFetch('/auth/me');
+  console.log('[getMe] status:', res.status, 'ok:', res.ok);
   if (!res.ok) return null;
-  return res.json();
+  const data = await res.json();
+  console.log('[getMe] data:', data);
+  return data;
 }
 
 export async function logout() {
