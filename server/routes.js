@@ -65,6 +65,13 @@ router.put('/api/state', requireAuth, express.json({ limit: '5mb' }), (req, res)
   res.json({ ok: true });
 });
 
+// POST variant for sendBeacon (used on page unload)
+router.post('/api/state', requireAuth, express.json({ limit: '5mb' }), (req, res) => {
+  const stateJson = JSON.stringify(req.body);
+  stmts.upsertState.run(req.user.id, stateJson);
+  res.json({ ok: true });
+});
+
 // ── Invitation system ──
 
 router.get('/api/invitations', requireAuth, (req, res) => {
