@@ -1,7 +1,7 @@
 import { getState, setState, resetState, exportState, importState, DEFAULT_INTERVIEW_TOPICS } from './state.js';
 import { generateQuestions, extractVocabulary } from './gemini.js';
 import { LEVELS, QUESTIONS_PER_LEVEL, getLevelIndex } from './curriculum.js';
-import { speak, stop } from './speech.js';
+import { speak, stop, listHungarianVoices, setVoiceURI, getVoiceURI } from './speech.js';
 import {
   selectSessionQuestions,
   recordCorrect,
@@ -610,6 +610,29 @@ document.getElementById('btn-back-welcome').onclick = () => {
 };
 
 // ─── Settings Screen ───
+function populateVoiceSelect() {
+  const select = document.getElementById('voice-select');
+  const voices = listHungarianVoices();
+  const currentURI = getState().settings.voiceURI || getVoiceURI();
+  select.innerHTML = '';
+
+  if (voices.length === 0) {
+    const opt = document.createElement('option');
+    opt.textContent = 'No Hungarian voices found';
+    opt.value = '';
+    select.appendChild(opt);
+    return;
+  }
+
+  voices.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.uri;
+    opt.textContent = `${v.name} (${v.lang}${v.local ? ', local' : ''})`;
+    if (v.uri === currentURI) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
 function initSettings() {
   const state = getState();
   document.getElementById('settings-api-key').value = state.apiKey || '';
@@ -617,6 +640,7 @@ function initSettings() {
   document.getElementById('speech-rate').value = state.settings.speechRate;
   document.getElementById('speech-rate-value').textContent = state.settings.speechRate;
   document.getElementById('auto-speak').checked = state.settings.autoSpeak;
+  populateVoiceSelect();
   renderTopicsEditor(state.interviewTopics || []);
 }
 
@@ -625,12 +649,25 @@ document.getElementById('btn-settings').onclick = () => {
   showScreen('settings');
 };
 
+document.getElementById('voice-select').onchange = (e) => {
+  const uri = e.target.value;
+  setVoiceURI(uri);
+  setState({ settings: { ...getState().settings, voiceURI: uri } });
+};
+
+document.getElementById('btn-voice-test').onclick = () => {
+  const rate = parseFloat(document.getElementById('speech-rate').value);
+  speak('Szia! Hogy vagy?', rate);
+};
+
 document.getElementById('btn-settings-back').onclick = () => {
   // Save settings
   const apiKey = document.getElementById('settings-api-key').value.trim();
   const speechRate = parseFloat(document.getElementById('speech-rate').value);
   const autoSpeak = document.getElementById('auto-speak').checked;
-  setState({ apiKey, settings: { ...getState().settings, speechRate, autoSpeak } });
+  const voiceURI = document.getElementById('voice-select').value;
+  setVoiceURI(voiceURI);
+  setState({ apiKey, settings: { ...getState().settings, speechRate, autoSpeak, voiceURI } });
 
   showScreen(previousScreen === 'settings' ? 'quiz' : previousScreen);
 };
@@ -1520,6 +1557,10 @@ function init() {
   superHardMode = state.settings.superHardMode || false;
   document.getElementById('hard-mode-checkbox').checked = hardMode;
   document.getElementById('super-hard-checkbox').checked = superHardMode;
+  // Restore saved voice
+  if (state.settings.voiceURI) {
+    setVoiceURI(state.settings.voiceURI);
+  }
   initWelcome();
 }
 
