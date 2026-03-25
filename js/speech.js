@@ -13,7 +13,7 @@ if (typeof speechSynthesis !== 'undefined') {
 }
 
 export function speak(text, rate = 0.85) {
-  if (typeof speechSynthesis === 'undefined') return;
+  if (typeof speechSynthesis === 'undefined') return Promise.resolve();
   speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'hu-HU';
@@ -21,7 +21,11 @@ export function speak(text, rate = 0.85) {
   if (voice) utterance.voice = voice;
   utterance.rate = rate;
   utterance.pitch = 1;
-  speechSynthesis.speak(utterance);
+  return new Promise((resolve) => {
+    utterance.onend = resolve;
+    utterance.onerror = resolve;
+    speechSynthesis.speak(utterance);
+  });
 }
 
 export function stop() {

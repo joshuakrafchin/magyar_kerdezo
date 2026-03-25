@@ -16,6 +16,7 @@ let currentScreen = 'welcome';
 let previousScreen = 'welcome';
 let backgroundGenerating = false;
 let hardMode = false;
+let superHardMode = false;
 
 function showScreen(name) {
   previousScreen = currentScreen;
@@ -308,7 +309,8 @@ function showQuestion() {
 
   // Show question
   const questionTextEl = document.getElementById('quiz-question-text');
-  if (hardMode) {
+  const effectiveHard = hardMode || superHardMode;
+  if (effectiveHard) {
     document.getElementById('quiz-step-label').textContent = 'Step 1: What did you hear?';
     questionTextEl.textContent = '\uD83D\uDD0A Listen...';
     questionTextEl.classList.add('hard-mode-hidden');
@@ -320,19 +322,28 @@ function showQuestion() {
   document.getElementById('quiz-explanation').classList.add('hidden');
   document.getElementById('btn-next').classList.add('hidden');
 
-  // Speak — always auto-speak in hard mode
+  // Show meaning options (hidden if super hard until audio done)
+  renderOptions(q.meaningOptions);
+
+  const quizScreen = document.getElementById('screen-quiz');
+  if (superHardMode) {
+    quizScreen.classList.add('options-hidden');
+  }
+
+  // Speak — always auto-speak in hard/super-hard mode
   const state = getState();
-  if (state.settings.autoSpeak || hardMode) {
-    speak(q.questionHu, state.settings.speechRate);
+  if (state.settings.autoSpeak || effectiveHard) {
+    speak(q.questionHu, state.settings.speechRate).then(() => {
+      if (superHardMode) {
+        quizScreen.classList.remove('options-hidden');
+      }
+    });
   }
 
   // Speak button
   document.getElementById('btn-speak').onclick = () => {
     speak(q.questionHu, getState().settings.speechRate);
   };
-
-  // Show meaning options
-  renderOptions(q.meaningOptions);
 }
 
 let currentOptionCards = []; // track for keyboard access
@@ -370,6 +381,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key === '3' || e.key.toLowerCase() === 'c') idx = 2;
 
   if (idx >= 0 && idx < activeOptions.length) {
+    // Block keyboard picks while options are hidden in super hard mode
+    const screenEl = document.getElementById(isFlashcard ? 'screen-flashcards' : 'screen-quiz');
+    if (screenEl.classList.contains('options-hidden')) return;
     const { card, opt, allOptions } = activeOptions[idx];
     if (!card.classList.contains('disabled')) {
       if (isFlashcard) {
@@ -1009,6 +1023,7 @@ let fcIndex = 0;
 let fcStats = { correct: 0, incorrect: 0, bestStreak: 0, currentStreak: 0, mistakes: [] };
 let fcOptionCards = [];
 let fcHardMode = false;
+let fcSuperHardMode = false;
 let fcWaitingForTap = false;
 
 function startFlashcards() {
@@ -1082,7 +1097,8 @@ function showFlashcard() {
     `${fcIndex + 1} / ${fcCards.length}`;
 
   const questionTextEl = document.getElementById('fc-question-text');
-  if (fcHardMode) {
+  const effectiveFcHard = fcHardMode || fcSuperHardMode;
+  if (effectiveFcHard) {
     document.getElementById('fc-step-label').textContent = 'What did you hear?';
     questionTextEl.textContent = '\uD83D\uDD0A Listen...';
     questionTextEl.classList.add('hard-mode-hidden');
@@ -1095,10 +1111,19 @@ function showFlashcard() {
   document.getElementById('fc-tap-hint').classList.add('hidden');
   fcWaitingForTap = false;
 
+  const fcScreen = document.getElementById('screen-flashcards');
+  if (fcSuperHardMode) {
+    fcScreen.classList.add('options-hidden');
+  }
+
   // Speak
   const state = getState();
-  if (state.settings.autoSpeak || fcHardMode) {
-    speak(card.hu, state.settings.speechRate);
+  if (state.settings.autoSpeak || effectiveFcHard) {
+    speak(card.hu, state.settings.speechRate).then(() => {
+      if (fcSuperHardMode) {
+        fcScreen.classList.remove('options-hidden');
+      }
+    });
   }
 
   document.getElementById('fc-btn-speak').onclick = () => {
@@ -1258,18 +1283,38 @@ document.getElementById('btn-fc-to-welcome').onclick = () => {
 // ─── Flashcard Hard Mode Toggle ───
 document.getElementById('fc-hard-mode-checkbox').onchange = (e) => {
   fcHardMode = e.target.checked;
+  if (!fcHardMode && fcSuperHardMode) {
+    fcSuperHardMode = false;
+    document.getElementById('fc-super-hard-checkbox').checked = false;
+    document.getElementById('screen-flashcards').classList.remove('options-hidden');
+  }
+};
+
+// ─── Flashcard Super Hard Mode Toggle ───
+document.getElementById('fc-super-hard-checkbox').onchange = (e) => {
+  fcSuperHardMode = e.target.checked;
+  if (fcSuperHardMode) {
+    fcHardMode = true;
+    document.getElementById('fc-hard-mode-checkbox').checked = true;
+  }
 };
 
 // ─── Hard Mode Toggle ───
 document.getElementById('hard-mode-checkbox').onchange = (e) => {
   hardMode = e.target.checked;
+  // If turning off hard mode, also turn off super hard
+  if (!hardMode && superHardMode) {
+    superHardMode = false;
+    document.getElementById('super-hard-checkbox').checked = false;
+    document.getElementById('screen-quiz').classList.remove('options-hidden');
+  }
   // Persist preference
-  setState({ settings: { ...getState().settings, hardMode } });
+  setState({ settings: { ...getState().settings, hardMode, superHardMode } });
   // If mid-question on step 1, update display immediately
   if (currentScreen === 'quiz' && quizStep === 1 && sessionQuestions[sessionIndex]) {
     const q = sessionQuestions[sessionIndex];
     const questionTextEl = document.getElementById('quiz-question-text');
-    if (hardMode) {
+    if (hardMode || superHardMode) {
       questionTextEl.textContent = '\uD83D\uDD0A Listen...';
       questionTextEl.classList.add('hard-mode-hidden');
       document.getElementById('quiz-step-label').textContent = 'Step 1: What did you hear?';
@@ -1279,6 +1324,34 @@ document.getElementById('hard-mode-checkbox').onchange = (e) => {
       questionTextEl.classList.remove('hard-mode-hidden');
       document.getElementById('quiz-step-label').textContent = 'Step 1: What does this mean?';
     }
+  }
+};
+
+// ─── Super Hard Mode Toggle ───
+document.getElementById('super-hard-checkbox').onchange = (e) => {
+  superHardMode = e.target.checked;
+  setState({ settings: { ...getState().settings, superHardMode } });
+  if (superHardMode) {
+    hardMode = true;
+    document.getElementById('hard-mode-checkbox').checked = true;
+    setState({ settings: { ...getState().settings, hardMode: true, superHardMode: true } });
+  }
+  // If mid-question on step 1, update display
+  if (currentScreen === 'quiz' && quizStep === 1 && sessionQuestions[sessionIndex]) {
+    const q = sessionQuestions[sessionIndex];
+    const questionTextEl = document.getElementById('quiz-question-text');
+    const quizScreen = document.getElementById('screen-quiz');
+    questionTextEl.textContent = '\uD83D\uDD0A Listen...';
+    questionTextEl.classList.add('hard-mode-hidden');
+    document.getElementById('quiz-step-label').textContent = 'Step 1: What did you hear?';
+    if (superHardMode) {
+      quizScreen.classList.add('options-hidden');
+    }
+    speak(q.questionHu, getState().settings.speechRate).then(() => {
+      if (superHardMode) {
+        quizScreen.classList.remove('options-hidden');
+      }
+    });
   }
 };
 
@@ -1444,7 +1517,9 @@ function init() {
   const state = getState();
   // Restore hard mode preference
   hardMode = state.settings.hardMode || false;
+  superHardMode = state.settings.superHardMode || false;
   document.getElementById('hard-mode-checkbox').checked = hardMode;
+  document.getElementById('super-hard-checkbox').checked = superHardMode;
   initWelcome();
 }
 
