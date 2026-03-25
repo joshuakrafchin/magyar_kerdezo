@@ -396,7 +396,18 @@ body {
 .hard-mode-toggle {
   display: flex;
   justify-content: flex-end;
+  gap: 16px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.options-hidden .option-card {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.options-hidden .keyboard-hint {
+  visibility: hidden;
 }
 
 .toggle-label {
