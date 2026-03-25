@@ -1564,6 +1564,7 @@ async function init() {
   hardMode = state.settings.hardMode || false;
   document.getElementById('hard-mode-checkbox').checked = hardMode;
   initWelcome();
+  showScreen('welcome');
 }
 
 init().catch(err => console.error('Init failed:', err));
