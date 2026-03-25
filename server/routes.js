@@ -1,6 +1,6 @@
 const express = require('express');
 const { getAuthUrl, handleCallback, requireAuth, requireAdmin, TOKEN_MAX_AGE } = require('./auth');
-const { stmts } = require('./db');
+const { queryOne, queryAll, run } = require('./db');
 const { callGemini } = require('./gemini');
 const { TOPICS, LEVELS, QUESTIONS_PER_LEVEL } = require('./curriculum');
 
@@ -49,8 +49,8 @@ router.get('/auth/me', requireAuth, (req, res) => {
 
 // ── User state (progress sync) ──
 
-router.get('/api/state', requireAuth, (req, res) => {
-  const row = stmts.getState.get(req.user.id);
+router.get('/api/state', requireAuth, async (req, res) => {
+  const row = await queryOne('SELECT state_json FROM user_state WHERE user_id = ?', [req.user.id]);
   if (!row) return res.json({});
   try {
     res.json(JSON.parse(row.state_json));
@@ -59,30 +59,44 @@ router.get('/api/state', requireAuth, (req, res) => {
   }
 });
 
-router.put('/api/state', requireAuth, express.json({ limit: '5mb' }), (req, res) => {
+router.put('/api/state', requireAuth, express.json({ limit: '5mb' }), async (req, res) => {
   const stateJson = JSON.stringify(req.body);
-  stmts.upsertState.run(req.user.id, stateJson);
+  await run(
+    `INSERT INTO user_state (user_id, state_json, updated_at) VALUES (?, ?, datetime('now'))
+     ON CONFLICT(user_id) DO UPDATE SET state_json = excluded.state_json, updated_at = datetime('now')`,
+    [req.user.id, stateJson]
+  );
   res.json({ ok: true });
 });
 
 // POST variant for sendBeacon (used on page unload)
-router.post('/api/state', requireAuth, express.json({ limit: '5mb' }), (req, res) => {
+router.post('/api/state', requireAuth, express.json({ limit: '5mb' }), async (req, res) => {
   const stateJson = JSON.stringify(req.body);
-  stmts.upsertState.run(req.user.id, stateJson);
+  await run(
+    `INSERT INTO user_state (user_id, state_json, updated_at) VALUES (?, ?, datetime('now'))
+     ON CONFLICT(user_id) DO UPDATE SET state_json = excluded.state_json, updated_at = datetime('now')`,
+    [req.user.id, stateJson]
+  );
   res.json({ ok: true });
 });
 
 // ── Invitation system ──
 
-router.get('/api/invitations', requireAuth, (req, res) => {
+router.get('/api/invitations', requireAuth, async (req, res) => {
   // Admin sees all, regular users see their own
   const invitations = req.user.role === 'admin'
-    ? stmts.getInvitations.all('SYSTEM')
-    : stmts.getMyInvitations.all(req.user.id);
+    ? await queryAll(
+        'SELECT i.email, i.created_at, u.name as invited_by_name FROM invitations i LEFT JOIN users u ON i.invited_by = u.id WHERE i.invited_by != ? ORDER BY i.created_at DESC',
+        ['SYSTEM']
+      )
+    : await queryAll(
+        'SELECT email, created_at FROM invitations WHERE invited_by = ? ORDER BY created_at DESC',
+        [req.user.id]
+      );
   res.json(invitations);
 });
 
-router.post('/api/invitations', requireAuth, express.json(), (req, res) => {
+router.post('/api/invitations', requireAuth, express.json(), async (req, res) => {
   // Only admin can invite
   if (req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Only the admin can invite users' });
@@ -93,12 +107,12 @@ router.post('/api/invitations', requireAuth, express.json(), (req, res) => {
     return res.status(400).json({ error: 'Valid email required' });
   }
 
-  const exists = stmts.invitationExists.get(email);
+  const exists = await queryOne('SELECT 1 FROM invitations WHERE LOWER(email) = LOWER(?)', [email]);
   if (exists) {
     return res.status(409).json({ error: 'Already invited' });
   }
 
-  stmts.addInvitation.run(email, req.user.id);
+  await run('INSERT INTO invitations (email, invited_by) VALUES (?, ?)', [email, req.user.id]);
   res.json({ ok: true, email });
 });
 
