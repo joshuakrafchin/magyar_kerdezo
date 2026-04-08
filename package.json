@@ -1,0 +1,21 @@
+{
+  "name": "magyar-kerdezo",
+  "version": "2.0.0",
+  "description": "Hungarian exam prep with Google OAuth and server-side AI",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.1",
+    "google-auth-library": "^9.14.1",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^11.0.3"
+  }
+}
